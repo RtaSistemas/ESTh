@@ -19,42 +19,42 @@ interface CanvasProps {
   displayScale?: number;
 }
 
-// Paleta categórica validada (skill dataviz: 8 matizes, ordem fixa,
-// checada com scripts/validate_palette.js contra --bg-canvas #141620 —
-// banda de luminosidade, piso de chroma, separação CVD e contraste vs.
-// superfície todos PASS). Não reordenar os 8 primeiros: a ordem em si é o
-// mecanismo de segurança CVD. datetime/gamelistinfo usam cinza neutro
-// (informação secundária, não competem pela mesma identidade das 8 cores).
-const CATEGORICAL_HEX = {
-  blue: "#3987e5",
-  orange: "#d95926",
-  aqua: "#199e70",
-  yellow: "#c98500",
-  magenta: "#d55181",
-  green: "#008300",
-  violet: "#9085e9",
-  red: "#e66767",
+// Só os tons que aparecem na referência de esquema de cores do app
+// ($primary): nada de laranja/amarelo/magenta/verde/vermelho inventados.
+// Cada hex checado com validate_palette.js `contrast()` contra
+// --bg-canvas #141620 — as 3 primeiras >= 3.84:1, a 4ª (usada só como
+// contorno de seleção, nunca como fill) em 7.16:1.
+const CANVAS_HEX = {
+  slateBlue: "#5d80ab", // contraste 4.41
+  teal: "#458487", // contraste 4.21
+  indigo: "#6272a5", // contraste 3.84
+  lightBlue: "#7aa2f7", // contraste 7.16 — reservado pro contorno de seleção
 } as const;
 
+// Só 3 matizes reais disponíveis (o 4º é reservado pro contorno de
+// seleção) — 10 tipos de elemento então diferenciam por tier de opacidade,
+// não por matiz: containers primários ficam mais translúcidos (item de
+// exemplo desenha por cima), secundários mais opacos (o preenchimento É
+// o conteúdo visível).
 const FALLBACK_COLOR: Record<string, string> = {
-  carousel: `${CATEGORICAL_HEX.blue}55`,
-  grid: `${CATEGORICAL_HEX.violet}55`,
-  textlist: `${CATEGORICAL_HEX.aqua}55`,
-  image: `${CATEGORICAL_HEX.orange}88`,
-  text: `${CATEGORICAL_HEX.green}88`,
-  video: `${CATEGORICAL_HEX.red}aa`,
-  badges: `${CATEGORICAL_HEX.magenta}aa`,
-  rating: `${CATEGORICAL_HEX.yellow}aa`,
-  datetime: "#7c8797aa",
-  gamelistinfo: "#5b6472aa",
+  carousel: `${CANVAS_HEX.indigo}66`,
+  grid: `${CANVAS_HEX.teal}66`,
+  textlist: `${CANVAS_HEX.slateBlue}66`,
+  image: `${CANVAS_HEX.slateBlue}e6`,
+  text: `${CANVAS_HEX.teal}e6`,
+  video: `${CANVAS_HEX.indigo}e6`,
+  badges: `${CANVAS_HEX.slateBlue}b3`,
+  rating: `${CANVAS_HEX.teal}b3`,
+  datetime: `${CANVAS_HEX.indigo}73`,
+  gamelistinfo: `${CANVAS_HEX.slateBlue}73`,
 };
 
-const SELECTION_COLOR = "#5b8cff";
+const SELECTION_COLOR = CANVAS_HEX.lightBlue;
 
 // Dados fake só para dar volume visual ao preview estático de
 // carousel/grid/textlist — não representam jogos reais nem vêm de nenhuma
 // fonte (DAT, gamelist.xml, etc.), é fora de escopo ler isso.
-const SAMPLE_ITEM_COLORS = Object.values(CATEGORICAL_HEX);
+const SAMPLE_ITEM_COLORS = [CANVAS_HEX.slateBlue, CANVAS_HEX.teal, CANVAS_HEX.indigo];
 
 const SAMPLE_GAME_NAMES = [
   "Super Mario World",
