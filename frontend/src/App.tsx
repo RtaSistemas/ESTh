@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Canvas } from "./components/Canvas";
 import { Inspector } from "./components/Inspector";
+import { clearPersistedProject, loadPersistedProject, savePersistedProject } from "./persistence";
 import type { ColorSchemeInfo, Schema, ThemeModel, ViewName } from "./schema/types";
 
 const API_BASE = "http://localhost:8000";
@@ -68,11 +69,16 @@ const SEED_MODEL: ThemeModel = {
 export default function App() {
   const [schema, setSchema] = useState<Schema | null>(null);
 
+  // Lido uma única vez (lazy initializer) — os demais useState abaixo
+  // semeiam a partir daqui em vez de sempre começar do SEED_MODEL.
+  const [persisted] = useState(() => loadPersistedProject());
+
   // Histórico para undo/redo: pilha de snapshots do modelo + ponteiro.
   // Cada mudança efetiva (mover, editar propriedade, adicionar, remover,
   // importar) empurra um novo snapshot e descarta o "futuro" se o usuário
   // havia dado undo antes de editar de novo — comportamento padrão de editor.
-  const [history, setHistory] = useState<ThemeModel[]>([SEED_MODEL]);
+  // O histórico de undo em si não é persistido, só o snapshot atual.
+  const [history, setHistory] = useState<ThemeModel[]>([persisted?.model ?? SEED_MODEL]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const model = history[historyIndex];
 
@@ -93,16 +99,44 @@ export default function App() {
     setHistoryIndex((i) => Math.min(history.length - 1, i + 1));
   }
 
-  const [view, setView] = useState<ViewName>("gamelist");
+  const [view, setView] = useState<ViewName>(persisted?.view ?? "gamelist");
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [newElementType, setNewElementType] = useState<string>("");
 
-  const [colorSchemes, setColorSchemes] = useState<ColorSchemeInfo[]>([]);
-  const [selectedScheme, setSelectedScheme] = useState<string>("");
+  const [colorSchemes, setColorSchemes] = useState<ColorSchemeInfo[]>(persisted?.colorSchemes ?? []);
+  const [selectedScheme, setSelectedScheme] = useState<string>(persisted?.selectedScheme ?? "");
   // nome do esquema -> (nome da variável -> valor resolvido)
-  const [variablesByScheme, setVariablesByScheme] = useState<Record<string, Record<string, string>>>({});
-  // path do asset como referenciado no XML -> objectURL local
+  const [variablesByScheme, setVariablesByScheme] = useState<Record<string, Record<string, string>>>(
+    persisted?.variablesByScheme ?? {}
+  );
+  // path do asset como referenciado no XML -> objectURL local — nunca
+  // persistido (objectURL morre ao recarregar), ver persistence.ts.
   const [assetMap, setAssetMap] = useState<Record<string, string>>({});
+
+  // Autosave: qualquer mudança no projeto grava no localStorage (debounce
+  // curto pra não escrever a cada tecla ao digitar um número no Inspector).
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      savePersistedProject({ model, view, selectedScheme, colorSchemes, variablesByScheme });
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [model, view, selectedScheme, colorSchemes, variablesByScheme]);
+
+  function handleNewTheme() {
+    const ok = window.confirm(
+      "Isso descarta o tema atual (e o histórico de desfazer) e recomeça do zero. Continuar?"
+    );
+    if (!ok) return;
+    clearPersistedProject();
+    setHistory([SEED_MODEL]);
+    setHistoryIndex(0);
+    setSelectedIndex(null);
+    setView("gamelist");
+    setColorSchemes([]);
+    setSelectedScheme("");
+    setVariablesByScheme({});
+    setAssetMap({});
+  }
 
   useEffect(() => {
     fetch(`${API_BASE}/schema`)
@@ -304,6 +338,9 @@ export default function App() {
             </button>
             <button className="btn" onClick={redo} disabled={historyIndex === history.length - 1} title="Refazer">
               ↷ Refazer
+            </button>
+            <button className="btn" onClick={handleNewTheme} title="Descarta o tema atual e recomeça do zero">
+              Novo tema
             </button>
           </div>
 
