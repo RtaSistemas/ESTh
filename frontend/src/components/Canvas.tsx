@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Label, Tag, Group } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
-import { resolveElementBox, boxTopLeftToPos } from "../geometry";
+import { resolveElementBox, boxTopLeftToPos, boxToPosAndSize } from "../geometry";
+import type { PixelBox } from "../geometry";
 import { resolveVariable } from "../schema/types";
 import type { ThemeElement, ViewName } from "../schema/types";
 
@@ -12,6 +13,7 @@ interface CanvasProps {
   selectedIndex: number | null;
   onSelect: (index: number) => void;
   onMove: (index: number, newPos: [number, number]) => void;
+  onResize: (index: number, newSize: [number, number], newPos: [number, number]) => void;
   // path do asset (conforme referenciado no XML, ex "./core/frame.png") -> objectURL local
   assetMap: Record<string, string>;
   // variáveis resolvidas da colorScheme atualmente selecionada (pode ser undefined)
@@ -435,17 +437,66 @@ function ElementVisual({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Resize por arraste: 4 handles nos cantos do elemento selecionado. Move
+// o canto oposto ao que está sendo arrastado fica fixo; o canto arrastado
+// vira o novo x/y ou x+width/y+height, conforme o caso — dá pra calcular
+// os dois a partir só do ponto fixo + ponto arrastado, sem se importar
+// qual canto é qual.
+// ---------------------------------------------------------------------------
+
+type Corner = "nw" | "ne" | "sw" | "se";
+
+const MIN_BOX_PX = 12; // tamanho mínimo em pixels de referência, evita size 0
+
+function cornerPoint(corner: Corner, box: PixelBox): { x: number; y: number } {
+  switch (corner) {
+    case "nw":
+      return { x: box.x, y: box.y };
+    case "ne":
+      return { x: box.x + box.width, y: box.y };
+    case "sw":
+      return { x: box.x, y: box.y + box.height };
+    case "se":
+      return { x: box.x + box.width, y: box.y + box.height };
+  }
+}
+
+const OPPOSITE_CORNER: Record<Corner, Corner> = { nw: "se", ne: "sw", sw: "ne", se: "nw" };
+
+function fixedPointForCorner(corner: Corner, box: PixelBox): { x: number; y: number } {
+  return cornerPoint(OPPOSITE_CORNER[corner], box);
+}
+
+function boxFromTwoCorners(a: { x: number; y: number }, b: { x: number; y: number }): PixelBox {
+  return {
+    x: Math.min(a.x, b.x),
+    y: Math.min(a.y, b.y),
+    width: Math.max(MIN_BOX_PX, Math.abs(b.x - a.x)),
+    height: Math.max(MIN_BOX_PX, Math.abs(b.y - a.y)),
+  };
+}
+
+interface ResizeState {
+  index: number;
+  corner: Corner;
+  fixedPoint: { x: number; y: number };
+  box: PixelBox;
+}
+
 export function Canvas({
   elements,
   reference,
   selectedIndex,
   onSelect,
   onMove,
+  onResize,
   assetMap,
   variables,
   displayScale = 0.5,
 }: CanvasProps) {
   const [refW, refH] = reference;
+  const [resizeState, setResizeState] = useState<ResizeState | null>(null);
 
   // zIndex maior desenha por cima. Guardamos o índice original (não a
   // posição pós-sort) porque onSelect/onMove referenciam o modelo pelo
@@ -466,6 +517,44 @@ export function Canvas({
     onMove(index, newPos);
   }
 
+  // Box "efetivo" de um elemento: durante o resize, o selecionado usa a
+  // prévia ao vivo (resizeState.box) em vez do valor ainda gravado no
+  // modelo — é o que dá o feedback visual imediato ao arrastar um handle.
+  function effectiveBox(index: number, box: PixelBox): PixelBox {
+    return resizeState && resizeState.index === index ? resizeState.box : box;
+  }
+
+  const selectedElement = selectedIndex !== null ? elements[selectedIndex] : undefined;
+  let selectedBox: PixelBox | null = null;
+  if (selectedElement) {
+    const pos = (selectedElement.properties.pos as [number, number]) ?? [0, 0];
+    const size = (selectedElement.properties.size as [number, number]) ?? [0.2, 0.1];
+    const origin = (selectedElement.properties.origin as [number, number]) ?? [0, 0];
+    selectedBox = effectiveBox(selectedIndex as number, resolveElementBox(pos, size, origin, reference));
+  }
+
+  function handleResizeDragStart(corner: Corner) {
+    if (selectedIndex === null || !selectedBox) return;
+    setResizeState({ index: selectedIndex, corner, fixedPoint: fixedPointForCorner(corner, selectedBox), box: selectedBox });
+  }
+
+  function handleResizeDragMove(e: KonvaEventObject<DragEvent>, handleSize: number) {
+    if (!resizeState) return;
+    const draggedCorner = { x: e.target.x() + handleSize / 2, y: e.target.y() + handleSize / 2 };
+    setResizeState({ ...resizeState, box: boxFromTwoCorners(resizeState.fixedPoint, draggedCorner) });
+  }
+
+  function handleResizeDragEnd(e: KonvaEventObject<DragEvent>, handleSize: number) {
+    if (!resizeState) return;
+    const draggedCorner = { x: e.target.x() + handleSize / 2, y: e.target.y() + handleSize / 2 };
+    const finalBox = boxFromTwoCorners(resizeState.fixedPoint, draggedCorner);
+    const el = elements[resizeState.index];
+    const origin = (el.properties.origin as [number, number]) ?? [0, 0];
+    const { pos, size } = boxToPosAndSize(finalBox, origin, reference);
+    onResize(resizeState.index, size, pos);
+    setResizeState(null);
+  }
+
   return (
     <Stage
       width={refW * displayScale}
@@ -479,7 +568,7 @@ export function Canvas({
           const pos = (el.properties.pos as [number, number]) ?? [0, 0];
           const size = (el.properties.size as [number, number]) ?? [0.2, 0.1];
           const origin = (el.properties.origin as [number, number]) ?? [0, 0];
-          const box = resolveElementBox(pos, size, origin, reference);
+          const box = effectiveBox(index, resolveElementBox(pos, size, origin, reference));
 
           return (
             <ElementVisual
@@ -506,7 +595,7 @@ export function Canvas({
           const pos = (el.properties.pos as [number, number]) ?? [0, 0];
           const origin = (el.properties.origin as [number, number]) ?? [0, 0];
           const size = (el.properties.size as [number, number]) ?? [0.2, 0.1];
-          const box = resolveElementBox(pos, size, origin, reference);
+          const box = effectiveBox(index, resolveElementBox(pos, size, origin, reference));
           const isSelected = index === selectedIndex;
           const fontSize = 11 / displayScale;
           const gap = 5 / displayScale;
@@ -530,6 +619,32 @@ export function Canvas({
             </Label>
           );
         })}
+        {/* Handles de resize — só no elemento selecionado. Cada um arrasta
+            livremente; o canto oposto fica fixo (fixedPointForCorner) e o
+            novo box é recalculado a cada frame (handleResizeDragMove) pra
+            dar feedback visual imediato, sem esperar o commit no modelo. */}
+        {selectedBox &&
+          (["nw", "ne", "sw", "se"] as Corner[]).map((corner) => {
+            const handleSize = 8 / displayScale;
+            const point = cornerPoint(corner, selectedBox);
+            return (
+              <Rect
+                key={`resize-handle-${corner}`}
+                x={point.x - handleSize / 2}
+                y={point.y - handleSize / 2}
+                width={handleSize}
+                height={handleSize}
+                fill="#ffffff"
+                stroke={SELECTION_COLOR}
+                strokeWidth={1.5 / displayScale}
+                cornerRadius={2 / displayScale}
+                draggable
+                onDragStart={() => handleResizeDragStart(corner)}
+                onDragMove={(e) => handleResizeDragMove(e, handleSize)}
+                onDragEnd={(e) => handleResizeDragEnd(e, handleSize)}
+              />
+            );
+          })}
       </Layer>
     </Stage>
   );

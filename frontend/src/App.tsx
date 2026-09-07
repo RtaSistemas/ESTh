@@ -182,6 +182,15 @@ export default function App() {
     });
   }
 
+  function resizeElement(index: number, newSize: [number, number], newPos: [number, number]) {
+    applyModelChange((prev) => {
+      const next = structuredClone(prev);
+      next.views[view][index].properties.size = newSize;
+      next.views[view][index].properties.pos = newPos;
+      return next;
+    });
+  }
+
   function addElement() {
     if (!schema || !newElementType) return;
     const elementDef = schema.elements[newElementType];
@@ -434,6 +443,7 @@ export default function App() {
               selectedIndex={selectedIndex}
               onSelect={setSelectedIndex}
               onMove={moveElement}
+              onResize={resizeElement}
               assetMap={assetMap}
               variables={variablesByScheme[selectedScheme]}
             />

@@ -44,3 +44,17 @@ export function boxTopLeftToPos(
 
   return [posPxX / refW, posPxY / refH];
 }
+
+// Inverso de resolveElementBox quando pos E size mudam junto (resize por
+// arraste de handle) — dado o retângulo final em pixels e a origin atual,
+// devolve pos e size normalizados prontos para gravar no modelo.
+export function boxToPosAndSize(
+  box: PixelBox,
+  origin: [number, number],
+  reference: [number, number]
+): { pos: [number, number]; size: [number, number] } {
+  const [refW, refH] = reference;
+  const size: [number, number] = [box.width / refW, box.height / refH];
+  const pos = boxTopLeftToPos({ x: box.x, y: box.y }, size, origin, reference);
+  return { pos, size };
+}
