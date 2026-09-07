@@ -19,17 +19,34 @@ interface CanvasProps {
   displayScale?: number;
 }
 
+// Paleta categórica validada (skill dataviz: 8 matizes, ordem fixa,
+// checada com scripts/validate_palette.js contra --bg-canvas #141620 —
+// banda de luminosidade, piso de chroma, separação CVD e contraste vs.
+// superfície todos PASS). Não reordenar os 8 primeiros: a ordem em si é o
+// mecanismo de segurança CVD. datetime/gamelistinfo usam cinza neutro
+// (informação secundária, não competem pela mesma identidade das 8 cores).
+const CATEGORICAL_HEX = {
+  blue: "#3987e5",
+  orange: "#d95926",
+  aqua: "#199e70",
+  yellow: "#c98500",
+  magenta: "#d55181",
+  green: "#008300",
+  violet: "#9085e9",
+  red: "#e66767",
+} as const;
+
 const FALLBACK_COLOR: Record<string, string> = {
-  carousel: "#5b7fff88",
-  grid: "#5b7fff66",
-  textlist: "#5b7fff44",
-  image: "#f2994a55",
-  text: "#27ae6055",
-  video: "#eb5757aa",
-  badges: "#bb6bd9aa",
-  rating: "#f2c94caa",
-  datetime: "#56ccf2aa",
-  gamelistinfo: "#828282aa",
+  carousel: `${CATEGORICAL_HEX.blue}55`,
+  grid: `${CATEGORICAL_HEX.violet}55`,
+  textlist: `${CATEGORICAL_HEX.aqua}55`,
+  image: `${CATEGORICAL_HEX.orange}88`,
+  text: `${CATEGORICAL_HEX.green}88`,
+  video: `${CATEGORICAL_HEX.red}aa`,
+  badges: `${CATEGORICAL_HEX.magenta}aa`,
+  rating: `${CATEGORICAL_HEX.yellow}aa`,
+  datetime: "#7c8797aa",
+  gamelistinfo: "#5b6472aa",
 };
 
 const SELECTION_COLOR = "#5b8cff";
@@ -37,16 +54,7 @@ const SELECTION_COLOR = "#5b8cff";
 // Dados fake só para dar volume visual ao preview estático de
 // carousel/grid/textlist — não representam jogos reais nem vêm de nenhuma
 // fonte (DAT, gamelist.xml, etc.), é fora de escopo ler isso.
-const SAMPLE_ITEM_COLORS = [
-  "#5b8cff",
-  "#9b6bff",
-  "#f2994a",
-  "#27ae60",
-  "#eb5757",
-  "#56ccf2",
-  "#f2c94c",
-  "#bb6bd9",
-];
+const SAMPLE_ITEM_COLORS = Object.values(CATEGORICAL_HEX);
 
 const SAMPLE_GAME_NAMES = [
   "Super Mario World",
