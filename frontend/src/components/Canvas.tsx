@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Group } from "react-konva";
+import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Label, Tag } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { resolveElementBox, boxTopLeftToPos } from "../geometry";
 import { resolveVariable } from "../schema/types";
@@ -31,6 +31,8 @@ const FALLBACK_COLOR: Record<string, string> = {
   datetime: "#56ccf2aa",
   gamelistinfo: "#828282aa",
 };
+
+const SELECTION_COLOR = "#5b8cff";
 
 // Carrega uma HTMLImageElement nativa a partir de um objectURL e força
 // re-render quando termina de carregar. Sem dependência extra (evita
@@ -128,7 +130,7 @@ function ElementVisual({
           y={box.y}
           width={box.width}
           height={box.height}
-          stroke={isSelected ? "#ffffff" : undefined}
+          stroke={isSelected ? SELECTION_COLOR : undefined}
           strokeWidth={isSelected ? 2 / displayScale : 0}
           {...commonHandlers}
         />
@@ -143,7 +145,8 @@ function ElementVisual({
         width={box.width}
         height={box.height}
         fill={FALLBACK_COLOR.image}
-        stroke={isSelected ? "#ffffff" : "#00000000"}
+        cornerRadius={4 / displayScale}
+        stroke={isSelected ? SELECTION_COLOR : "#00000000"}
         strokeWidth={isSelected ? 2 / displayScale : 0}
         {...commonHandlers}
       />
@@ -172,7 +175,7 @@ function ElementVisual({
         opacity={hexAlpha(resolvedColor)}
         align={align}
         verticalAlign={verticalAlign}
-        stroke={isSelected ? "#ffffff" : undefined}
+        stroke={isSelected ? SELECTION_COLOR : undefined}
         strokeWidth={isSelected ? 1 / displayScale : 0}
         {...commonHandlers}
       />
@@ -188,7 +191,8 @@ function ElementVisual({
       width={box.width}
       height={box.height}
       fill={FALLBACK_COLOR[element.type] ?? "#88888855"}
-      stroke={isSelected ? "#ffffff" : "#00000000"}
+      cornerRadius={4 / displayScale}
+      stroke={isSelected ? SELECTION_COLOR : "#00000000"}
       strokeWidth={isSelected ? 2 / displayScale : 0}
       {...commonHandlers}
     />
@@ -232,7 +236,7 @@ export function Canvas({
       height={refH * displayScale}
       scaleX={displayScale}
       scaleY={displayScale}
-      style={{ background: "#111318", border: "1px solid #2a2d36" }}
+      className="canvas-frame"
     >
       <Layer>
         {drawOrder.map(({ el, index }) => {
@@ -257,32 +261,37 @@ export function Canvas({
             />
           );
         })}
-        {/* Rótulos de identificação — barra sólida no topo de cada elemento
-            para não se misturar visualmente com o conteúdo real desenhado
-            por baixo (bug da rodada anterior). */}
+        {/* Rótulos de identificação — tag flutuante ancorada acima do
+            elemento (não sobre o conteúdo, bug da rodada anterior) para não
+            se misturar visualmente com o que é desenhado por baixo. Quando o
+            elemento está encostado no topo do canvas, a tag desce para
+            dentro para não sair da área visível. */}
         {drawOrder.map(({ el, index }) => {
           const pos = (el.properties.pos as [number, number]) ?? [0, 0];
           const origin = (el.properties.origin as [number, number]) ?? [0, 0];
           const size = (el.properties.size as [number, number]) ?? [0.2, 0.1];
           const box = resolveElementBox(pos, size, origin, reference);
-          const labelHeight = 16 / displayScale;
+          const isSelected = index === selectedIndex;
+          const fontSize = 11 / displayScale;
+          const gap = 5 / displayScale;
+          const tagHeight = fontSize + 8 / displayScale;
+          const floatsAbove = box.y - gap - tagHeight >= 0;
+          const y = floatsAbove ? box.y - gap - tagHeight : box.y + gap;
+
           return (
-            <Group key={`label-${index}`} listening={false}>
-              <Rect
-                x={box.x}
-                y={box.y}
-                width={box.width}
-                height={labelHeight}
-                fill="#000000aa"
+            <Label key={`label-${index}`} x={box.x} y={y} listening={false}>
+              <Tag
+                fill={isSelected ? SELECTION_COLOR : "#0b0c0fcc"}
+                cornerRadius={3 / displayScale}
               />
               <KonvaText
-                x={box.x + 4}
-                y={box.y + 2}
                 text={`${el.type}:${el.name}`}
-                fontSize={12 / displayScale}
-                fill="#ffffff"
+                fontSize={fontSize}
+                padding={4 / displayScale}
+                fill={isSelected ? "#0b0c0f" : "#e8e9ec"}
+                fontStyle={isSelected ? "bold" : "normal"}
               />
-            </Group>
+            </Label>
           );
         })}
       </Layer>

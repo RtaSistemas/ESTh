@@ -271,119 +271,122 @@ export default function App() {
   }
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#0b0c0f" }}>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        <header
-          style={{
-            padding: "10px 16px",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 12,
-            alignItems: "center",
-            borderBottom: "1px solid #1f222a",
-            color: "#e6e6e6",
-            fontFamily: "system-ui, sans-serif",
-          }}
-        >
-          <strong>ES-DE Theme Editor</strong>
-          <select
-            value={view}
-            onChange={(e) => {
-              const nextView = e.target.value as ViewName;
-              setView(nextView);
-              setSelectedIndex(null);
-              const firstValid = schema
-                ? Object.entries(schema.elements).find(([, def]) => def.views.includes(nextView))?.[0]
-                : undefined;
-              if (firstValid) setNewElementType(firstValid);
-            }}
-          >
-            <option value="system">system</option>
-            <option value="gamelist">gamelist</option>
-          </select>
+    <div className="app-shell">
+      <div className="app-main">
+        <header className="topbar">
+          <div className="brand">
+            <span className="brand-mark">ES</span>
+            <span className="brand-title">Theme Editor</span>
+          </div>
 
-          <button onClick={undo} disabled={historyIndex === 0} title="Desfazer">
-            ↶ Desfazer
-          </button>
-          <button onClick={redo} disabled={historyIndex === history.length - 1} title="Refazer">
-            ↷ Refazer
-          </button>
+          <div className="toolbar-group">
+            <select
+              className="select"
+              value={view}
+              onChange={(e) => {
+                const nextView = e.target.value as ViewName;
+                setView(nextView);
+                setSelectedIndex(null);
+                const firstValid = schema
+                  ? Object.entries(schema.elements).find(([, def]) => def.views.includes(nextView))?.[0]
+                  : undefined;
+                if (firstValid) setNewElementType(firstValid);
+              }}
+            >
+              <option value="system">system</option>
+              <option value="gamelist">gamelist</option>
+            </select>
 
-          <span style={{ borderLeft: "1px solid #2a2d36", height: 20 }} />
+            <button className="btn" onClick={undo} disabled={historyIndex === 0} title="Desfazer">
+              ↶ Desfazer
+            </button>
+            <button className="btn" onClick={redo} disabled={historyIndex === history.length - 1} title="Refazer">
+              ↷ Refazer
+            </button>
+          </div>
 
-          <select value={newElementType} onChange={(e) => setNewElementType(e.target.value)}>
-            {elementTypesForView.map((tag) => (
-              <option key={tag} value={tag}>
-                {tag}
-              </option>
-            ))}
-          </select>
-          <button onClick={addElement} disabled={!newElementType}>
-            + Adicionar elemento
-          </button>
-          <button onClick={deleteSelectedElement} disabled={!selectedElement}>
-            🗑 Remover selecionado
-          </button>
+          <span className="toolbar-divider" />
 
-          <span style={{ borderLeft: "1px solid #2a2d36", height: 20 }} />
+          <div className="toolbar-group">
+            <select className="select" value={newElementType} onChange={(e) => setNewElementType(e.target.value)}>
+              {elementTypesForView.map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
+              ))}
+            </select>
+            <button className="btn btn-primary" onClick={addElement} disabled={!newElementType}>
+              + Adicionar elemento
+            </button>
+            <button className="btn btn-danger" onClick={deleteSelectedElement} disabled={!selectedElement}>
+              🗑 Remover selecionado
+            </button>
+          </div>
 
-          <label style={{ cursor: "pointer" }}>
-            Importar theme.xml
-            <input
-              type="file"
-              accept=".xml"
-              style={{ display: "none" }}
-              onChange={(e) => e.target.files && handleImport(e.target.files[0])}
-            />
-          </label>
-          <button onClick={handleExport}>Exportar theme.xml</button>
+          <span className="toolbar-divider" />
 
-          <span style={{ borderLeft: "1px solid #2a2d36", height: 20 }} />
+          <div className="toolbar-group">
+            <label className="file-btn">
+              Importar theme.xml
+              <input
+                type="file"
+                accept=".xml"
+                onChange={(e) => e.target.files && handleImport(e.target.files[0])}
+              />
+            </label>
+            <button className="btn btn-primary" onClick={handleExport}>
+              Exportar theme.xml
+            </button>
+          </div>
 
-          <label style={{ cursor: "pointer" }}>
-            Importar capabilities.xml
-            <input
-              type="file"
-              accept=".xml"
-              style={{ display: "none" }}
-              onChange={(e) => e.target.files && handleImportCapabilities(e.target.files[0])}
-            />
-          </label>
+          <span className="toolbar-divider" />
 
-          {colorSchemes.length > 0 && (
-            <>
-              <select value={selectedScheme} onChange={(e) => setSelectedScheme(e.target.value)}>
-                {colorSchemes.map((cs) => (
-                  <option key={cs.name} value={cs.name}>
-                    {cs.displayName}
-                  </option>
-                ))}
-              </select>
-              <label style={{ cursor: "pointer" }}>
-                Importar variáveis desta scheme
-                <input
-                  type="file"
-                  accept=".xml"
-                  style={{ display: "none" }}
-                  onChange={(e) => e.target.files && handleImportVariables(e.target.files[0], selectedScheme)}
-                />
-              </label>
-            </>
-          )}
+          <div className="toolbar-group">
+            <label className="file-btn">
+              Importar capabilities.xml
+              <input
+                type="file"
+                accept=".xml"
+                onChange={(e) => e.target.files && handleImportCapabilities(e.target.files[0])}
+              />
+            </label>
 
-          <label style={{ cursor: "pointer" }}>
+            {colorSchemes.length > 0 && (
+              <>
+                <select className="select" value={selectedScheme} onChange={(e) => setSelectedScheme(e.target.value)}>
+                  {colorSchemes.map((cs) => (
+                    <option key={cs.name} value={cs.name}>
+                      {cs.displayName}
+                    </option>
+                  ))}
+                </select>
+                <label className="file-btn">
+                  Importar variáveis
+                  <input
+                    type="file"
+                    accept=".xml"
+                    onChange={(e) => e.target.files && handleImportVariables(e.target.files[0], selectedScheme)}
+                  />
+                </label>
+                <span className="scheme-pill">{selectedScheme}</span>
+              </>
+            )}
+          </div>
+
+          <span className="toolbar-spacer" />
+
+          <label className="file-btn">
             Importar pasta de assets
             <input
               type="file"
               // @ts-expect-error webkitdirectory não está no lib.dom.d.ts
               webkitdirectory=""
-              style={{ display: "none" }}
               onChange={(e) => e.target.files && handleImportAssets(e.target.files)}
             />
           </label>
         </header>
 
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div className="viewport">
           {schema ? (
             <Canvas
               elements={elements}
@@ -396,7 +399,7 @@ export default function App() {
               variables={variablesByScheme[selectedScheme]}
             />
           ) : (
-            <p style={{ color: "#888" }}>Carregando schema do backend...</p>
+            <p className="viewport-loading">Carregando schema do backend...</p>
           )}
         </div>
       </div>
