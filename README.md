@@ -104,6 +104,12 @@ valores default do schema → desfazer remove → refazer restaura.
 - **Suíte de testes no backend** (`backend/tests/`, pytest): parser,
   serializer (com round-trip completo), geometry, capabilities,
   variables, schema e os endpoints da API — 35 testes.
+- **Multi-seleção**: shift-clique adiciona/remove elemento da seleção;
+  arrastar qualquer um dos selecionados move o grupo inteiro preservando
+  a posição relativa entre eles; botões de alinhar (esquerda/topo/centro
+  horizontal/centro vertical) na toolbar quando >= 2 selecionados;
+  remover selecionados apaga todos de uma vez. Handles de resize
+  continuam só para seleção única.
 
 ## Escopo atual (o que NÃO está incluído ainda)
 
@@ -115,7 +121,8 @@ Deixado para expansão de escopo futura:
   adicionou um preview estático dos itens (posição/exibição calculada a
   partir do schema), mas não simula qual item está selecionado nem
   transições.
-- Multi-seleção de elementos (mover/alinhar vários juntos)
+- Resize por arraste de um grupo multi-selecionado (só funciona com 1
+  elemento selecionado por vez)
 - Assets importados (pasta local) não são persistidos entre sessões — só
   o modelo/colorScheme/variáveis são (ver rodada 4); reimportar a pasta
   depois de recarregar a página é necessário.

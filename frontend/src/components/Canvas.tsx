@@ -10,9 +10,14 @@ interface CanvasProps {
   elements: ThemeElement[];
   view: ViewName;
   reference: [number, number];
-  selectedIndex: number | null;
-  onSelect: (index: number) => void;
+  selectedIndices: number[];
+  // additive = shift pressionado (adiciona/remove do conjunto); sem
+  // shift, substitui a seleção inteira por esse único índice.
+  onSelect: (index: number, additive: boolean) => void;
   onMove: (index: number, newPos: [number, number]) => void;
+  // Arrastar qualquer elemento de um grupo multi-selecionado move todos
+  // juntos, preservando a posição relativa entre eles.
+  onMoveMany: (indices: number[], delta: [number, number]) => void;
   onResize: (index: number, newSize: [number, number], newPos: [number, number]) => void;
   // path do asset (conforme referenciado no XML, ex "./core/frame.png") -> objectURL local
   assetMap: Record<string, string>;
@@ -302,7 +307,7 @@ interface ElementVisualProps {
   assetMap: Record<string, string>;
   variables?: Record<string, string>;
   displayScale: number;
-  onSelect: (index: number) => void;
+  onSelect: (index: number, additive: boolean) => void;
   onDragEnd: (index: number, topLeft: { x: number; y: number }) => void;
 }
 
@@ -320,8 +325,8 @@ function ElementVisual({
 }: ElementVisualProps) {
   const commonHandlers = {
     draggable: true,
-    onClick: () => onSelect(index),
-    onTap: () => onSelect(index),
+    onClick: (e: KonvaEventObject<MouseEvent>) => onSelect(index, e.evt.shiftKey),
+    onTap: () => onSelect(index, false),
     onDragEnd: (e: KonvaEventObject<DragEvent>) =>
       onDragEnd(index, { x: e.target.x(), y: e.target.y() }),
   };
@@ -487,9 +492,10 @@ interface ResizeState {
 export function Canvas({
   elements,
   reference,
-  selectedIndex,
+  selectedIndices,
   onSelect,
   onMove,
+  onMoveMany,
   onResize,
   assetMap,
   variables,
@@ -514,7 +520,15 @@ export function Canvas({
     const size = (el.properties.size as [number, number]) ?? [0.2, 0.1];
     const origin = (el.properties.origin as [number, number]) ?? [0, 0];
     const newPos = boxTopLeftToPos(topLeft, size, origin, reference);
-    onMove(index, newPos);
+
+    // Se o elemento arrastado faz parte de um grupo multi-selecionado,
+    // move o grupo inteiro pela mesma variação — senão só ele mesmo.
+    if (selectedIndices.length > 1 && selectedIndices.includes(index)) {
+      const oldPos = (el.properties.pos as [number, number]) ?? [0, 0];
+      onMoveMany(selectedIndices, [newPos[0] - oldPos[0], newPos[1] - oldPos[1]]);
+    } else {
+      onMove(index, newPos);
+    }
   }
 
   // Box "efetivo" de um elemento: durante o resize, o selecionado usa a
@@ -524,18 +538,26 @@ export function Canvas({
     return resizeState && resizeState.index === index ? resizeState.box : box;
   }
 
-  const selectedElement = selectedIndex !== null ? elements[selectedIndex] : undefined;
+  // Handles de resize só fazem sentido com exatamente 1 elemento
+  // selecionado — redimensionar um grupo inteiro fica fora de escopo.
+  const singleSelectedIndex = selectedIndices.length === 1 ? selectedIndices[0] : null;
+  const selectedElement = singleSelectedIndex !== null ? elements[singleSelectedIndex] : undefined;
   let selectedBox: PixelBox | null = null;
   if (selectedElement) {
     const pos = (selectedElement.properties.pos as [number, number]) ?? [0, 0];
     const size = (selectedElement.properties.size as [number, number]) ?? [0.2, 0.1];
     const origin = (selectedElement.properties.origin as [number, number]) ?? [0, 0];
-    selectedBox = effectiveBox(selectedIndex as number, resolveElementBox(pos, size, origin, reference));
+    selectedBox = effectiveBox(singleSelectedIndex as number, resolveElementBox(pos, size, origin, reference));
   }
 
   function handleResizeDragStart(corner: Corner) {
-    if (selectedIndex === null || !selectedBox) return;
-    setResizeState({ index: selectedIndex, corner, fixedPoint: fixedPointForCorner(corner, selectedBox), box: selectedBox });
+    if (singleSelectedIndex === null || !selectedBox) return;
+    setResizeState({
+      index: singleSelectedIndex,
+      corner,
+      fixedPoint: fixedPointForCorner(corner, selectedBox),
+      box: selectedBox,
+    });
   }
 
   function handleResizeDragMove(e: KonvaEventObject<DragEvent>, handleSize: number) {
@@ -576,7 +598,7 @@ export function Canvas({
               element={el}
               index={index}
               box={box}
-              isSelected={index === selectedIndex}
+              isSelected={selectedIndices.includes(index)}
               reference={reference}
               assetMap={assetMap}
               variables={variables}
@@ -596,7 +618,7 @@ export function Canvas({
           const origin = (el.properties.origin as [number, number]) ?? [0, 0];
           const size = (el.properties.size as [number, number]) ?? [0.2, 0.1];
           const box = effectiveBox(index, resolveElementBox(pos, size, origin, reference));
-          const isSelected = index === selectedIndex;
+          const isSelected = selectedIndices.includes(index);
           const fontSize = 11 / displayScale;
           const gap = 5 / displayScale;
           const tagHeight = fontSize + 8 / displayScale;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Canvas } from "./components/Canvas";
 import { Inspector } from "./components/Inspector";
+import { boxTopLeftToPos, resolveElementBox } from "./geometry";
 import { clearPersistedProject, loadPersistedProject, savePersistedProject } from "./persistence";
 import type { ColorSchemeInfo, Schema, ThemeModel, ViewName } from "./schema/types";
 
@@ -100,7 +101,9 @@ export default function App() {
   }
 
   const [view, setView] = useState<ViewName>(persisted?.view ?? "gamelist");
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  // Múltiplos índices selecionados (shift-clique adiciona/remove). Clique
+  // sem shift substitui a seleção inteira por um único elemento.
+  const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [newElementType, setNewElementType] = useState<string>("");
 
   const [colorSchemes, setColorSchemes] = useState<ColorSchemeInfo[]>(persisted?.colorSchemes ?? []);
@@ -130,7 +133,7 @@ export default function App() {
     clearPersistedProject();
     setHistory([SEED_MODEL]);
     setHistoryIndex(0);
-    setSelectedIndex(null);
+    setSelectedIndices([]);
     setView("gamelist");
     setColorSchemes([]);
     setSelectedScheme("");
@@ -156,7 +159,7 @@ export default function App() {
   }, []);
 
   const elements = model.views[view];
-  const selectedElement = selectedIndex !== null ? elements[selectedIndex] : null;
+  const selectedElement = selectedIndices.length === 1 ? elements[selectedIndices[0]] : null;
   const selectedElementDef = selectedElement && schema ? schema.elements[selectedElement.type] : null;
 
   const elementTypesForView = schema
@@ -165,11 +168,19 @@ export default function App() {
         .map(([tag]) => tag)
     : [];
 
+  function handleSelect(index: number, additive: boolean) {
+    setSelectedIndices((prev) => {
+      if (!additive) return [index];
+      return prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index];
+    });
+  }
+
   function updateProperty(propName: string, value: unknown) {
-    if (selectedIndex === null) return;
+    if (selectedIndices.length !== 1) return;
+    const index = selectedIndices[0];
     applyModelChange((prev) => {
       const next = structuredClone(prev);
-      next.views[view][selectedIndex].properties[propName] = value;
+      next.views[view][index].properties[propName] = value;
       return next;
     });
   }
@@ -182,11 +193,67 @@ export default function App() {
     });
   }
 
+  // Arrastar qualquer elemento de um grupo multi-selecionado move o grupo
+  // inteiro junto, preservando a posição relativa entre eles.
+  function moveManyElements(indices: number[], delta: [number, number]) {
+    applyModelChange((prev) => {
+      const next = structuredClone(prev);
+      for (const index of indices) {
+        const pos = (next.views[view][index].properties.pos as [number, number]) ?? [0, 0];
+        next.views[view][index].properties.pos = [pos[0] + delta[0], pos[1] + delta[1]];
+      }
+      return next;
+    });
+  }
+
   function resizeElement(index: number, newSize: [number, number], newPos: [number, number]) {
     applyModelChange((prev) => {
       const next = structuredClone(prev);
       next.views[view][index].properties.size = newSize;
       next.views[view][index].properties.pos = newPos;
+      return next;
+    });
+  }
+
+  // Alinha as bordas/centros de todos os elementos selecionados (>= 2) a
+  // um valor de referência comum, calculado em pixels via geometry.ts —
+  // nunca mistura aritmética normalizada com pixel fora dali.
+  function alignSelected(mode: "left" | "top" | "centerH" | "centerV") {
+    if (!schema || selectedIndices.length < 2) return;
+    const reference = schema.referenceResolution;
+
+    const items = selectedIndices.map((index) => {
+      const el = elements[index];
+      const pos = (el.properties.pos as [number, number]) ?? [0, 0];
+      const size = (el.properties.size as [number, number]) ?? [0.2, 0.1];
+      const origin = (el.properties.origin as [number, number]) ?? [0, 0];
+      return { index, size, origin, box: resolveElementBox(pos, size, origin, reference) };
+    });
+
+    let target: number;
+    if (mode === "left") target = Math.min(...items.map((i) => i.box.x));
+    else if (mode === "top") target = Math.min(...items.map((i) => i.box.y));
+    else if (mode === "centerH") {
+      const centers = items.map((i) => i.box.x + i.box.width / 2);
+      target = centers.reduce((a, b) => a + b, 0) / centers.length;
+    } else {
+      const centers = items.map((i) => i.box.y + i.box.height / 2);
+      target = centers.reduce((a, b) => a + b, 0) / centers.length;
+    }
+
+    applyModelChange((prev) => {
+      const next = structuredClone(prev);
+      for (const { index, size, origin, box } of items) {
+        const topLeft =
+          mode === "left"
+            ? { x: target, y: box.y }
+            : mode === "top"
+              ? { x: box.x, y: target }
+              : mode === "centerH"
+                ? { x: target - box.width / 2, y: box.y }
+                : { x: box.x, y: target - box.height / 2 };
+        next.views[view][index].properties.pos = boxTopLeftToPos(topLeft, size, origin, reference);
+      }
       return next;
     });
   }
@@ -220,17 +287,20 @@ export default function App() {
       next.views[view].push({ type: newElementType, name, properties });
       return next;
     });
-    setSelectedIndex(elements.length); // seleciona o recém-criado
+    setSelectedIndices([elements.length]); // seleciona o recém-criado
   }
 
-  function deleteSelectedElement() {
-    if (selectedIndex === null) return;
+  function deleteSelectedElements() {
+    if (selectedIndices.length === 0) return;
     applyModelChange((prev) => {
       const next = structuredClone(prev);
-      next.views[view].splice(selectedIndex, 1);
+      // Descendente pra splice não invalidar os próximos índices da lista.
+      for (const index of [...selectedIndices].sort((a, b) => b - a)) {
+        next.views[view].splice(index, 1);
+      }
       return next;
     });
-    setSelectedIndex(null);
+    setSelectedIndices([]);
   }
 
   async function handleExport() {
@@ -310,7 +380,7 @@ export default function App() {
     }
     const parsed: ThemeModel = await res.json();
     applyModelChange(() => parsed);
-    setSelectedIndex(null);
+    setSelectedIndices([]);
   }
 
   return (
@@ -331,7 +401,7 @@ export default function App() {
               onChange={(e) => {
                 const nextView = e.target.value as ViewName;
                 setView(nextView);
-                setSelectedIndex(null);
+                setSelectedIndices([]);
                 const firstValid = schema
                   ? Object.entries(schema.elements).find(([, def]) => def.views.includes(nextView))?.[0]
                   : undefined;
@@ -366,8 +436,49 @@ export default function App() {
             <button className="btn btn-primary" onClick={addElement} disabled={!newElementType}>
               + Adicionar elemento
             </button>
-            <button className="btn btn-danger" onClick={deleteSelectedElement} disabled={!selectedElement}>
-              🗑 Remover selecionado
+            <button
+              className="btn btn-danger"
+              onClick={deleteSelectedElements}
+              disabled={selectedIndices.length === 0}
+            >
+              🗑 Remover selecionado{selectedIndices.length > 1 ? "s" : ""}
+            </button>
+          </div>
+
+          <span className="toolbar-divider" />
+
+          <div className="toolbar-group">
+            <button
+              className="btn"
+              onClick={() => alignSelected("left")}
+              disabled={selectedIndices.length < 2}
+              title="Alinha a borda esquerda de todos pela mais à esquerda"
+            >
+              ⇤ Esq.
+            </button>
+            <button
+              className="btn"
+              onClick={() => alignSelected("top")}
+              disabled={selectedIndices.length < 2}
+              title="Alinha a borda superior de todos pela mais acima"
+            >
+              ⤒ Topo
+            </button>
+            <button
+              className="btn"
+              onClick={() => alignSelected("centerH")}
+              disabled={selectedIndices.length < 2}
+              title="Centraliza todos no mesmo eixo horizontal"
+            >
+              ↔ Centro H
+            </button>
+            <button
+              className="btn"
+              onClick={() => alignSelected("centerV")}
+              disabled={selectedIndices.length < 2}
+              title="Centraliza todos no mesmo eixo vertical"
+            >
+              ↕ Centro V
             </button>
           </div>
 
@@ -440,9 +551,10 @@ export default function App() {
               elements={elements}
               view={view}
               reference={schema.referenceResolution}
-              selectedIndex={selectedIndex}
-              onSelect={setSelectedIndex}
+              selectedIndices={selectedIndices}
+              onSelect={handleSelect}
               onMove={moveElement}
+              onMoveMany={moveManyElements}
               onResize={resizeElement}
               assetMap={assetMap}
               variables={variablesByScheme[selectedScheme]}
@@ -453,7 +565,12 @@ export default function App() {
         </div>
       </div>
 
-      <Inspector element={selectedElement} elementDef={selectedElementDef} onChange={updateProperty} />
+      <Inspector
+        element={selectedElement}
+        elementDef={selectedElementDef}
+        multiSelectedCount={selectedIndices.length}
+        onChange={updateProperty}
+      />
     </div>
   );
 }

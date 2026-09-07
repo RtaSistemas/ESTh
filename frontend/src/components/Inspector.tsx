@@ -3,13 +3,28 @@ import type { ElementDef, ThemeElement } from "../schema/types";
 interface InspectorProps {
   element: ThemeElement | null;
   elementDef: ElementDef | null;
+  // Tamanho do conjunto selecionado no canvas. > 1 mostra um resumo em
+  // vez de propriedades (editar várias de tipos possivelmente diferentes
+  // ao mesmo tempo não é o escopo — use os botões de alinhar na toolbar).
+  multiSelectedCount?: number;
   onChange: (propName: string, value: unknown) => void;
 }
 
 // Painel dinâmico: não conhece "carousel" ou "text" — só sabe ler
 // PropertyDef do schema e escolher o input certo pelo `type`. Adicionar um
 // elemento novo ao schema Python não exige tocar neste arquivo.
-export function Inspector({ element, elementDef, onChange }: InspectorProps) {
+export function Inspector({ element, elementDef, multiSelectedCount, onChange }: InspectorProps) {
+  if (multiSelectedCount && multiSelectedCount > 1) {
+    return (
+      <div className="inspector">
+        <div className="inspector-empty">
+          {multiSelectedCount} elementos selecionados. Use os botões de alinhar na toolbar, ou
+          clique em um só (sem shift) para editar propriedades.
+        </div>
+      </div>
+    );
+  }
+
   if (!element || !elementDef) {
     return (
       <div className="inspector">
