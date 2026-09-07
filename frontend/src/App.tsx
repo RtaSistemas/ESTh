@@ -273,12 +273,14 @@ export default function App() {
   return (
     <div className="app-shell">
       <div className="app-main">
-        <header className="topbar">
+        <div className="brand-bar">
           <div className="brand">
             <span className="brand-mark">ES</span>
             <span className="brand-title">Theme Editor</span>
           </div>
+        </div>
 
+        <header className="topbar">
           <div className="toolbar-group">
             <select
               className="select"

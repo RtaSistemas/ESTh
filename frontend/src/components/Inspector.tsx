@@ -23,7 +23,21 @@ export function Inspector({ element, elementDef, onChange }: InspectorProps) {
       <div className="inspector-header">
         <p className="inspector-eyebrow">Propriedades</p>
         <div className="inspector-type-row">
-          <span className="type-badge">{element.type}</span>
+          {/* Cor do badge vem do grupo do schema (primary/secondary), não
+              do nome da tag — instancesPerView já vem do mesmo campo. */}
+          <span
+            className="type-badge"
+            style={
+              {
+                "--type-badge-color":
+                  elementDef.group === "primary"
+                    ? "var(--badge-primary-group)"
+                    : "var(--badge-secondary-group)",
+              } as React.CSSProperties
+            }
+          >
+            {element.type}
+          </span>
         </div>
         <p className="inspector-name">{element.name}</p>
       </div>
