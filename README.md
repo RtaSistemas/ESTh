@@ -76,20 +76,49 @@ Validado de ponta a ponta via Chromium headless: schema com 10 elementos
 confirmado no `/schema`, adicionar elemento → aparece selecionado com
 valores default do schema → desfazer remove → refazer restaura.
 
+## Rodada 4 — reforma visual, preview estático, persistência, resize, testes
+
+- **Design system em CSS** (`frontend/src/styles.css`): toolbar/botões/
+  inputs consistentes no lugar de estilo inline ad-hoc, viewport com fundo
+  quadriculado, rótulos de elemento como tags flutuantes acima da caixa
+  (antes cobriam o conteúdo real desenhado por baixo).
+- **Esquema de cores por papel**: header/toolbar/sidebar do app usam papéis
+  ($surface/$primary/$primary-darken-2/$panel) com hex validados por
+  contraste contra cada fundo; a paleta categórica do canvas (itens de
+  carousel/grid, placeholders de elemento) foi reduzida a só os tons que
+  passam num piso de contraste de 3:1 contra `--bg-canvas`, sem cores
+  arbitrárias.
+- **Preview estático de `carousel`/`grid`/`textlist`**: em vez do
+  retângulo placeholder único, calcula e desenha itens de exemplo a
+  partir de `itemSize`/`itemScale`/`itemSpacing`/`rows`/`columns`/
+  `maxItemCount` — só posição/exibição, sem navegação ou item-ativo real.
+- **Persistência de projeto** (`frontend/src/persistence.ts`): modelo,
+  view, colorScheme selecionada e variáveis salvam no `localStorage`
+  (debounce de 400ms) e restauram ao recarregar a página. Botão "Novo
+  tema" descarta o projeto salvo. Assets importados continuam fora
+  (objectURL não sobrevive a reload).
+- **Resize por arraste**: 4 handles nos cantos do elemento selecionado,
+  com feedback visual ao vivo durante o arraste (`geometry.ts` ganhou
+  `boxToPosAndSize`, inverso de `resolveElementBox` quando pos e size
+  mudam juntos).
+- **Suíte de testes no backend** (`backend/tests/`, pytest): parser,
+  serializer (com round-trip completo), geometry, capabilities,
+  variables, schema e os endpoints da API — 35 testes.
+
 ## Escopo atual (o que NÃO está incluído ainda)
 
 Deixado para expansão de escopo futura:
 - `<variant>`, `<aspectRatio>`, `<fontSize>`, `<language>`, `<transitions>`
 - `<include>` (arquivos de tema divididos)
 - `sound`, `helpsystem`
-- Renderização real do `carousel`/`grid`/`textlist` (continuam
-  placeholder — não são um retângulo estático, requerem lógica de
-  item ativo/navegação)
-- Multi-seleção de elementos, redimensionamento por arraste (só
-  reposicionamento por drag está implementado; `size` só edita por número
-  no Inspector)
-- Persistência de projeto (assets/colorScheme/model hoje só existem em
-  memória do navegador — fechar a aba perde o estado)
+- Item ativo/navegação real em `carousel`/`grid`/`textlist` — a rodada 4
+  adicionou um preview estático dos itens (posição/exibição calculada a
+  partir do schema), mas não simula qual item está selecionado nem
+  transições.
+- Multi-seleção de elementos (mover/alinhar vários juntos)
+- Assets importados (pasta local) não são persistidos entre sessões — só
+  o modelo/colorScheme/variáveis são (ver rodada 4); reimportar a pasta
+  depois de recarregar a página é necessário.
 
 ## Rodando localmente
 
@@ -98,6 +127,10 @@ Backend:
 cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
+
+# testes (opcional)
+pip install -r requirements-dev.txt
+pytest -v
 ```
 
 Frontend:
@@ -113,10 +146,15 @@ não abrir vazio.
 
 ## Validado neste scaffold
 
-- Round-trip parser → serializer testado com o exemplo de `theme.xml` do
-  próprio `THEMES-DEV.md` (texto + imagem) — sem perda de dados.
-- `npx tsc -b` sem erros.
-- `npx vite build` gera build de produção sem erros.
+- Suíte automatizada no backend (`pytest`, `backend/tests/`): round-trip
+  parser → serializer, geometry, capabilities, variables, schema e os
+  endpoints da API — 35 testes.
+- `npx tsc -b` e `npx vite build` sem erros.
+- Fluxo end-to-end frontend↔backend com os dois processos no ar,
+  confirmado via Chromium headless (screenshots, seleção, edição de
+  propriedade, resize por arraste, reload com persistência).
 
-Não testado ainda: integração end-to-end frontend↔backend rodando os dois
-processos ao mesmo tempo (import/export reais via UI).
+Não testado ainda: frontend não tem suíte automatizada própria (só
+validação manual/via Chromium); nenhum teste cobre o fluxo real de import
+de um tema.xml de um tema publicado de verdade (só o exemplo do
+THEMES-DEV.md).

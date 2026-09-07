@@ -20,6 +20,11 @@ cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 
+# Testes do backend (parser/serializer/geometry/capabilities/variables/API)
+cd backend
+pip install -r requirements-dev.txt
+pytest -v
+
 # Frontend (React + Vite + TS)
 cd frontend
 npm install
@@ -27,10 +32,12 @@ npm run dev          # dev server, padrão http://localhost:5173
 npm run build         # tsc -b && vite build
 ```
 
-Não há suíte de testes automatizada ainda — validação até aqui foi manual
-(round-trip parser/serializer, `tsc -b`, `vite build`, fluxo end-to-end via
-Chromium headless). Ver "Validado neste scaffold" no README para o que já
-foi coberto.
+Backend tem suíte de testes automatizada (`backend/tests/`, pytest) cobrindo
+parser/serializer (round-trip completo), geometry, capabilities, variables,
+o schema (guarda de regressão pra `instancesPerView`) e os endpoints da API.
+Frontend segue validado manualmente (`tsc -b`, `vite build`, fluxo
+end-to-end via Chromium headless) — ainda sem testes automatizados. Ver
+"Validado neste scaffold" no README para o que já foi coberto.
 
 ## Arquitetura
 
