@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Label, Tag } from "react-konva";
+import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Label, Tag, Group } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { resolveElementBox, boxTopLeftToPos } from "../geometry";
 import { resolveVariable } from "../schema/types";
@@ -33,6 +33,31 @@ const FALLBACK_COLOR: Record<string, string> = {
 };
 
 const SELECTION_COLOR = "#5b8cff";
+
+// Dados fake só para dar volume visual ao preview estático de
+// carousel/grid/textlist — não representam jogos reais nem vêm de nenhuma
+// fonte (DAT, gamelist.xml, etc.), é fora de escopo ler isso.
+const SAMPLE_ITEM_COLORS = [
+  "#5b8cff",
+  "#9b6bff",
+  "#f2994a",
+  "#27ae60",
+  "#eb5757",
+  "#56ccf2",
+  "#f2c94c",
+  "#bb6bd9",
+];
+
+const SAMPLE_GAME_NAMES = [
+  "Super Mario World",
+  "Sonic the Hedgehog",
+  "Street Fighter II",
+  "Chrono Trigger",
+  "Metroid",
+  "Castlevania",
+  "Mega Man X",
+  "Contra",
+];
 
 // Carrega uma HTMLImageElement nativa a partir de um objectURL e força
 // re-render quando termina de carregar. Sem dependência extra (evita
@@ -79,6 +104,183 @@ function hexAlpha(hex: string): number {
     return parseInt(clean.slice(6, 8), 16) / 255;
   }
   return 1;
+}
+
+// ---------------------------------------------------------------------------
+// Preview estático dos elementos primários (carousel/grid/textlist): só
+// posição e exibição dos itens, sem navegação/animação/item-ativo-real —
+// é um cálculo de layout a partir das próprias propriedades do schema
+// (itemSize/itemScale/itemSpacing/rows/columns/maxItemCount), não uma
+// simulação do comportamento do ES-DE.
+// ---------------------------------------------------------------------------
+
+function renderCarouselItems(
+  element: ThemeElement,
+  box: { x: number; y: number; width: number; height: number },
+  reference: [number, number],
+  displayScale: number
+) {
+  const props = element.properties;
+  const type = (props.type as string) ?? "horizontal";
+  // horizontalWheel/verticalWheel são tratados no mesmo eixo de
+  // horizontal/vertical — a geometria em leque do wheel não está no schema
+  // (só posição/exibição básica é o escopo aqui).
+  const isVerticalAxis = type.startsWith("vertical");
+  const [refW, refH] = reference;
+  const itemSizeNorm = (props.itemSize as [number, number]) ?? [0.25, 0.155];
+  const itemW = itemSizeNorm[0] * refW;
+  const itemH = itemSizeNorm[1] * refH;
+  const itemScale = (props.itemScale as number) ?? 1;
+  const count = Math.max(1, Math.round((props.maxItemCount as number) ?? 3));
+  const horizontalOffset = (props.horizontalOffset as number) ?? 0;
+  const verticalOffset = (props.verticalOffset as number) ?? 0;
+  const centerIndex = Math.floor((count - 1) / 2);
+
+  const nodes = [];
+  for (let i = 0; i < count; i++) {
+    const t = (i + 0.5) / count;
+    const isCenter = i === centerIndex;
+    const scale = isCenter ? itemScale : 1;
+    const w = itemW * scale;
+    const h = itemH * scale;
+    const cx = isVerticalAxis
+      ? box.x + box.width / 2 + horizontalOffset * itemW
+      : box.x + t * box.width;
+    const cy = isVerticalAxis
+      ? box.y + t * box.height
+      : box.y + box.height / 2 + verticalOffset * itemH;
+
+    nodes.push(
+      <Rect
+        key={`carousel-item-${i}`}
+        x={cx - w / 2}
+        y={cy - h / 2}
+        width={w}
+        height={h}
+        cornerRadius={4 / displayScale}
+        fill={SAMPLE_ITEM_COLORS[i % SAMPLE_ITEM_COLORS.length]}
+        opacity={isCenter ? 1 : 0.5}
+        stroke={isCenter ? "#ffffff" : undefined}
+        strokeWidth={isCenter ? 1.5 / displayScale : 0}
+        listening={false}
+      />
+    );
+  }
+  return nodes;
+}
+
+function renderGridItems(
+  element: ThemeElement,
+  box: { x: number; y: number; width: number; height: number },
+  reference: [number, number],
+  displayScale: number
+) {
+  const props = element.properties;
+  const [refW, refH] = reference;
+  const itemSizeNorm = (props.itemSize as [number, number]) ?? [0.15, 0.2];
+  const spacingNorm = (props.itemSpacing as [number, number]) ?? [0.01, 0.01];
+  const itemScale = (props.itemScale as number) ?? 1;
+  const itemW = itemSizeNorm[0] * refW;
+  const itemH = itemSizeNorm[1] * refH;
+  const spacingX = spacingNorm[0] * refW;
+  const spacingY = spacingNorm[1] * refH;
+  // Cap de exibição — rows/columns podem ir até 20 no schema, mas isso é só
+  // um preview estático, não precisa desenhar centenas de retângulos.
+  const rows = Math.min(6, Math.max(1, Math.round((props.rows as number) ?? 3)));
+  const columns = Math.min(8, Math.max(1, Math.round((props.columns as number) ?? 5)));
+
+  const nodes = [];
+  let colorIndex = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < columns; c++) {
+      const isFocused = r === 0 && c === 0;
+      const scale = isFocused ? itemScale : 1;
+      const w = itemW * scale;
+      const h = itemH * scale;
+      const baseX = box.x + c * (itemW + spacingX);
+      const baseY = box.y + r * (itemH + spacingY);
+      // Escala ancorada no centro do item pra não desalinhar a grade.
+      const x = baseX - (w - itemW) / 2;
+      const y = baseY - (h - itemH) / 2;
+
+      nodes.push(
+        <Rect
+          key={`grid-item-${r}-${c}`}
+          x={x}
+          y={y}
+          width={w}
+          height={h}
+          cornerRadius={3 / displayScale}
+          fill={SAMPLE_ITEM_COLORS[colorIndex % SAMPLE_ITEM_COLORS.length]}
+          opacity={isFocused ? 1 : 0.5}
+          stroke={isFocused ? "#ffffff" : undefined}
+          strokeWidth={isFocused ? 1.5 / displayScale : 0}
+          listening={false}
+        />
+      );
+      colorIndex++;
+    }
+  }
+  return nodes;
+}
+
+function renderTextlistItems(
+  element: ThemeElement,
+  box: { x: number; y: number; width: number; height: number },
+  reference: [number, number],
+  displayScale: number,
+  variables: Record<string, string> | undefined
+) {
+  const props = element.properties;
+  const [, refH] = reference;
+  const rowHeightNorm = (props.selectorHeight as number) ?? 0.056;
+  const rowHeightPx = rowHeightNorm * refH;
+  const fontSizeNorm = (props.fontSize as number) ?? 0.045;
+  const fontSizePx = fontSizeNorm * refH;
+  const align = (props.horizontalAlignment as string) ?? "left";
+  const textColor = resolveVariable((props.color as string) ?? "000000FF", variables);
+  const selectorColor = resolveVariable((props.selectorColor as string) ?? "0000FFFF", variables);
+
+  const maxRowsThatFit = Math.max(1, Math.floor(box.height / Math.max(rowHeightPx, 1)));
+  const rowCount = Math.min(maxRowsThatFit, SAMPLE_GAME_NAMES.length);
+
+  const nodes = [];
+  for (let i = 0; i < rowCount; i++) {
+    const y = box.y + i * rowHeightPx;
+    if (i === 0) {
+      // Linha 0 representa o item "selecionado" — só pra mostrar a cor/altura
+      // do seletor, sem navegação real.
+      nodes.push(
+        <Rect
+          key="textlist-selector"
+          x={box.x}
+          y={y}
+          width={box.width}
+          height={rowHeightPx}
+          fill={hexColorToRgba(selectorColor)}
+          opacity={hexAlpha(selectorColor)}
+          listening={false}
+        />
+      );
+    }
+    nodes.push(
+      <KonvaText
+        key={`textlist-row-${i}`}
+        x={box.x + 6 / displayScale}
+        y={y}
+        width={box.width - 12 / displayScale}
+        height={rowHeightPx}
+        text={SAMPLE_GAME_NAMES[i]}
+        fontSize={fontSizePx}
+        align={align}
+        verticalAlign="middle"
+        fill={hexColorToRgba(textColor)}
+        opacity={hexAlpha(textColor)}
+        listening={false}
+      />
+    );
+  }
+  return nodes;
 }
 
 interface ElementVisualProps {
@@ -182,8 +384,34 @@ function ElementVisual({
     );
   }
 
-  // carousel e demais: continua placeholder (renderização real fora do
-  // escopo desta rodada — carrossel não é um retângulo estático)
+  if (element.type === "carousel" || element.type === "grid" || element.type === "textlist") {
+    return (
+      <Group>
+        {/* Fundo + hit target: seleção/drag continuam agindo sobre a área
+            inteira do elemento, não sobre os itens de exemplo desenhados
+            por cima. */}
+        <Rect
+          x={box.x}
+          y={box.y}
+          width={box.width}
+          height={box.height}
+          fill={FALLBACK_COLOR[element.type]}
+          cornerRadius={4 / displayScale}
+          stroke={isSelected ? SELECTION_COLOR : "#00000000"}
+          strokeWidth={isSelected ? 2 / displayScale : 0}
+          {...commonHandlers}
+        />
+        <Group listening={false} clipX={box.x} clipY={box.y} clipWidth={box.width} clipHeight={box.height}>
+          {element.type === "carousel" && renderCarouselItems(element, box, reference, displayScale)}
+          {element.type === "grid" && renderGridItems(element, box, reference, displayScale)}
+          {element.type === "textlist" && renderTextlistItems(element, box, reference, displayScale, variables)}
+        </Group>
+      </Group>
+    );
+  }
+
+  // demais tipos (video, badges, rating, datetime, gamelistinfo): continuam
+  // placeholder — sem renderização real de vídeo/badges/etc. neste escopo.
   return (
     <Rect
       x={box.x}
