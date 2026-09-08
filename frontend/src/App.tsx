@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Canvas } from "./components/Canvas";
 import { Inspector } from "./components/Inspector";
+import { clearAssetFiles, loadAllAssetFiles, saveAssetFile } from "./assetStorage";
 import { boxTopLeftToPos, resolveElementBox } from "./geometry";
 import { clearPersistedProject, loadPersistedProject, savePersistedProject } from "./persistence";
 import type { ColorSchemeInfo, Schema, ThemeModel, ViewName } from "./schema/types";
@@ -112,9 +113,23 @@ export default function App() {
   const [variablesByScheme, setVariablesByScheme] = useState<Record<string, Record<string, string>>>(
     persisted?.variablesByScheme ?? {}
   );
-  // path do asset como referenciado no XML -> objectURL local — nunca
-  // persistido (objectURL morre ao recarregar), ver persistence.ts.
+  // path do asset como referenciado no XML -> objectURL local. O objectURL
+  // em si não sobrevive a um reload, mas o arquivo por trás é persistido
+  // no IndexedDB (assetStorage.ts) e recarregado no useEffect abaixo.
   const [assetMap, setAssetMap] = useState<Record<string, string>>({});
+
+  // Restaura assets salvos de uma sessão anterior — só uma vez, ao montar.
+  useEffect(() => {
+    loadAllAssetFiles().then((files) => {
+      const urlMap: Record<string, string> = {};
+      for (const [key, blob] of Object.entries(files)) {
+        urlMap[key] = URL.createObjectURL(blob);
+      }
+      if (Object.keys(urlMap).length > 0) {
+        setAssetMap((prev) => ({ ...urlMap, ...prev }));
+      }
+    });
+  }, []);
 
   // Autosave: qualquer mudança no projeto grava no localStorage (debounce
   // curto pra não escrever a cada tecla ao digitar um número no Inspector).
@@ -131,6 +146,7 @@ export default function App() {
     );
     if (!ok) return;
     clearPersistedProject();
+    clearAssetFiles();
     setHistory([SEED_MODEL]);
     setHistoryIndex(0);
     setSelectedIndices([]);
@@ -365,6 +381,9 @@ export default function App() {
       const withoutRoot = relative.split("/").slice(1).join("/");
       const key = `./${withoutRoot}`;
       nextMap[key] = URL.createObjectURL(file);
+      // Fire-and-forget: persiste o arquivo pro IndexedDB pra sobreviver a
+      // um reload — não bloqueia a UI nem falha a importação se der erro.
+      saveAssetFile(key, file);
     }
     setAssetMap(nextMap);
   }

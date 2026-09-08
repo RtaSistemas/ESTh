@@ -95,8 +95,7 @@ valores default do schema → desfazer remove → refazer restaura.
 - **Persistência de projeto** (`frontend/src/persistence.ts`): modelo,
   view, colorScheme selecionada e variáveis salvam no `localStorage`
   (debounce de 400ms) e restauram ao recarregar a página. Botão "Novo
-  tema" descarta o projeto salvo. Assets importados continuam fora
-  (objectURL não sobrevive a reload).
+  tema" descarta o projeto salvo (e os assets, ver abaixo).
 - **Resize por arraste**: 4 handles nos cantos do elemento selecionado,
   com feedback visual ao vivo durante o arraste (`geometry.ts` ganhou
   `boxToPosAndSize`, inverso de `resolveElementBox` quando pos e size
@@ -118,6 +117,11 @@ valores default do schema → desfazer remove → refazer restaura.
   `itemsPerRow`/`itemMargin`; `datetime`/`gamelistinfo` mostram texto
   real (cor/fonte/alinhamento) com um valor de exemplo fixo —
   `datetime` não interpreta o `format` (estilo strftime) de verdade.
+- **Persistência de assets** (`frontend/src/assetStorage.ts`): os
+  arquivos importados via pasta agora são salvos num IndexedDB (por
+  path) e recarregados ao abrir a página — antes só o modelo persistia,
+  e imagens caíam pro placeholder após um reload mesmo com o `path`
+  intacto.
 
 ## Escopo atual (o que NÃO está incluído ainda)
 
@@ -131,9 +135,6 @@ Deixado para expansão de escopo futura:
   transições.
 - Resize por arraste de um grupo multi-selecionado (só funciona com 1
   elemento selecionado por vez)
-- Assets importados (pasta local) não são persistidos entre sessões — só
-  o modelo/colorScheme/variáveis são (ver rodada 4); reimportar a pasta
-  depois de recarregar a página é necessário.
 
 ## Rodando localmente
 

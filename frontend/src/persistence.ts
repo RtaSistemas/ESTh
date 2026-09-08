@@ -2,11 +2,12 @@
 // fechar a aba ou dar F5 perdia o tema inteiro, já que todo o estado
 // vivia só em memória do React.
 //
-// Assets (objectURL de arquivos importados via pasta) nunca são
-// persistidos: um objectURL morre ao recarregar a página, e guardar o
-// binário em localStorage estouraria a cota rápido. Ao restaurar, `path`
-// de imagem cai no placeholder até o usuário reimportar a pasta — mesmo
-// comportamento que já existe hoje para um path não resolvido.
+// Assets (arquivos de imagem importados via pasta) não entram aqui —
+// localStorage não aceita binário nem tem espaço pra isso — mas são
+// persistidos à parte via IndexedDB (assetStorage.ts). Se por algum
+// motivo o IndexedDB falhar/estiver indisponível, `path` de imagem cai
+// no placeholder até reimportar a pasta — mesmo comportamento que já
+// existe hoje para um path não resolvido.
 
 import type { ColorSchemeInfo, ThemeModel, ViewName } from "./schema/types";
 
