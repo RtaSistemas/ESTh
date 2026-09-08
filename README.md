@@ -108,7 +108,10 @@ valores default do schema → desfazer remove → refazer restaura.
   a posição relativa entre eles; botões de alinhar (esquerda/topo/centro
   horizontal/centro vertical) na toolbar quando >= 2 selecionados;
   remover selecionados apaga todos de uma vez. Handles de resize
-  continuam só para seleção única.
+  operam sobre a caixa delimitadora de todos os selecionados — cada
+  elemento escala proporcionalmente à sua posição/tamanho relativos
+  dentro do grupo (1 elemento é só um grupo com fração 100%, sem caso
+  especial), tudo num único snapshot de undo.
 - **Preview estático dos elementos secundários restantes**: `video`
   mostra o poster (`defaultImagePath`) se resolvido, com um ícone de
   play decorativo por cima; `rating` desenha 5 estrelas reais (Konva
@@ -122,6 +125,9 @@ valores default do schema → desfazer remove → refazer restaura.
   path) e recarregados ao abrir a página — antes só o modelo persistia,
   e imagens caíam pro placeholder após um reload mesmo com o `path`
   intacto.
+- **Resize de grupo multi-selecionado**: os handles de canto agora
+  funcionam com qualquer número de elementos selecionados, escalando
+  cada um proporcionalmente à caixa delimitadora do grupo.
 
 ## Escopo atual (o que NÃO está incluído ainda)
 
@@ -133,8 +139,6 @@ Deixado para expansão de escopo futura:
   adicionou um preview estático dos itens (posição/exibição calculada a
   partir do schema), mas não simula qual item está selecionado nem
   transições.
-- Resize por arraste de um grupo multi-selecionado (só funciona com 1
-  elemento selecionado por vez)
 
 ## Rodando localmente
 

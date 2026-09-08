@@ -29,7 +29,9 @@ interface CanvasProps {
   // Arrastar qualquer elemento de um grupo multi-selecionado move todos
   // juntos, preservando a posição relativa entre eles.
   onMoveMany: (indices: number[], delta: [number, number]) => void;
-  onResize: (index: number, newSize: [number, number], newPos: [number, number]) => void;
+  // Resize por handle: um único commit de modelo pra todos os elementos
+  // afetados (1 quando é seleção única, N quando é grupo).
+  onResizeMany: (updates: Array<{ index: number; size: [number, number]; pos: [number, number] }>) => void;
   // path do asset (conforme referenciado no XML, ex "./core/frame.png") -> objectURL local
   assetMap: Record<string, string>;
   // variáveis resolvidas da colorScheme atualmente selecionada (pode ser undefined)
@@ -699,11 +701,38 @@ function boxFromTwoCorners(a: { x: number; y: number }, b: { x: number; y: numbe
   };
 }
 
-interface ResizeState {
+function unionBox(boxes: PixelBox[]): PixelBox {
+  const minX = Math.min(...boxes.map((b) => b.x));
+  const minY = Math.min(...boxes.map((b) => b.y));
+  const maxX = Math.max(...boxes.map((b) => b.x + b.width));
+  const maxY = Math.max(...boxes.map((b) => b.y + b.height));
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+// Posição/tamanho de um membro do grupo como fração da caixa delimitadora
+// do grupo inteiro — assim, redimensionar o grupo é só reaplicar essas
+// frações sobre a nova caixa delimitadora, sem casos especiais pra 1 vs N
+// elementos selecionados (1 elemento é só um grupo cuja fração é 100%).
+interface ResizeMember {
   index: number;
+  origin: [number, number];
+  rel: { x: number; y: number; w: number; h: number };
+}
+
+interface ResizeState {
   corner: Corner;
   fixedPoint: { x: number; y: number };
   box: PixelBox;
+  members: ResizeMember[];
+}
+
+function relativeBoxToAbsolute(groupBox: PixelBox, rel: ResizeMember["rel"]): PixelBox {
+  return {
+    x: groupBox.x + rel.x * groupBox.width,
+    y: groupBox.y + rel.y * groupBox.height,
+    width: rel.w * groupBox.width,
+    height: rel.h * groupBox.height,
+  };
 }
 
 export function Canvas({
@@ -713,7 +742,7 @@ export function Canvas({
   onSelect,
   onMove,
   onMoveMany,
-  onResize,
+  onResizeMany,
   assetMap,
   variables,
   displayScale = 0.5,
@@ -748,32 +777,43 @@ export function Canvas({
     }
   }
 
-  // Box "efetivo" de um elemento: durante o resize, o selecionado usa a
-  // prévia ao vivo (resizeState.box) em vez do valor ainda gravado no
-  // modelo — é o que dá o feedback visual imediato ao arrastar um handle.
+  // Box "efetivo" de um elemento: durante o resize, cada membro do grupo
+  // usa sua fração (rel) aplicada sobre a caixa delimitadora ao vivo
+  // (resizeState.box) em vez do valor ainda gravado no modelo — é o que dá
+  // o feedback visual imediato ao arrastar um handle, pro grupo inteiro.
   function effectiveBox(index: number, box: PixelBox): PixelBox {
-    return resizeState && resizeState.index === index ? resizeState.box : box;
+    const member = resizeState?.members.find((m) => m.index === index);
+    return member ? relativeBoxToAbsolute(resizeState!.box, member.rel) : box;
   }
 
-  // Handles de resize só fazem sentido com exatamente 1 elemento
-  // selecionado — redimensionar um grupo inteiro fica fora de escopo.
-  const singleSelectedIndex = selectedIndices.length === 1 ? selectedIndices[0] : null;
-  const selectedElement = singleSelectedIndex !== null ? elements[singleSelectedIndex] : undefined;
-  let selectedBox: PixelBox | null = null;
-  if (selectedElement) {
-    const pos = (selectedElement.properties.pos as [number, number]) ?? [0, 0];
-    const size = (selectedElement.properties.size as [number, number]) ?? [0.2, 0.1];
-    const origin = (selectedElement.properties.origin as [number, number]) ?? [0, 0];
-    selectedBox = effectiveBox(singleSelectedIndex as number, resolveElementBox(pos, size, origin, reference));
-  }
+  // Caixa delimitadora de todos os elementos selecionados — com 1 só
+  // elemento, é a própria caixa dele (fração 100%), sem caso especial.
+  const selectedBoxes = selectedIndices.map((index) => {
+    const el = elements[index];
+    const pos = (el.properties.pos as [number, number]) ?? [0, 0];
+    const size = (el.properties.size as [number, number]) ?? [0.2, 0.1];
+    const origin = (el.properties.origin as [number, number]) ?? [0, 0];
+    return { index, origin, box: effectiveBox(index, resolveElementBox(pos, size, origin, reference)) };
+  });
+  const selectedBox = selectedBoxes.length > 0 ? unionBox(selectedBoxes.map((s) => s.box)) : null;
 
   function handleResizeDragStart(corner: Corner) {
-    if (singleSelectedIndex === null || !selectedBox) return;
+    if (!selectedBox || selectedBoxes.length === 0) return;
+    const members: ResizeMember[] = selectedBoxes.map(({ index, origin, box }) => ({
+      index,
+      origin,
+      rel: {
+        x: (box.x - selectedBox.x) / selectedBox.width,
+        y: (box.y - selectedBox.y) / selectedBox.height,
+        w: box.width / selectedBox.width,
+        h: box.height / selectedBox.height,
+      },
+    }));
     setResizeState({
-      index: singleSelectedIndex,
       corner,
       fixedPoint: fixedPointForCorner(corner, selectedBox),
       box: selectedBox,
+      members,
     });
   }
 
@@ -786,11 +826,13 @@ export function Canvas({
   function handleResizeDragEnd(e: KonvaEventObject<DragEvent>, handleSize: number) {
     if (!resizeState) return;
     const draggedCorner = { x: e.target.x() + handleSize / 2, y: e.target.y() + handleSize / 2 };
-    const finalBox = boxFromTwoCorners(resizeState.fixedPoint, draggedCorner);
-    const el = elements[resizeState.index];
-    const origin = (el.properties.origin as [number, number]) ?? [0, 0];
-    const { pos, size } = boxToPosAndSize(finalBox, origin, reference);
-    onResize(resizeState.index, size, pos);
+    const finalGroupBox = boxFromTwoCorners(resizeState.fixedPoint, draggedCorner);
+    const updates = resizeState.members.map((member) => {
+      const finalBox = relativeBoxToAbsolute(finalGroupBox, member.rel);
+      const { pos, size } = boxToPosAndSize(finalBox, member.origin, reference);
+      return { index: member.index, size, pos };
+    });
+    onResizeMany(updates);
     setResizeState(null);
   }
 

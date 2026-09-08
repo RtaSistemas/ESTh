@@ -222,11 +222,16 @@ export default function App() {
     });
   }
 
-  function resizeElement(index: number, newSize: [number, number], newPos: [number, number]) {
+  // Um resize por handle pode afetar 1 elemento (seleção única) ou vários
+  // de uma vez (grupo multi-selecionado) — sempre um snapshot só de undo,
+  // nunca um por elemento.
+  function resizeManyElements(updates: Array<{ index: number; size: [number, number]; pos: [number, number] }>) {
     applyModelChange((prev) => {
       const next = structuredClone(prev);
-      next.views[view][index].properties.size = newSize;
-      next.views[view][index].properties.pos = newPos;
+      for (const { index, size, pos } of updates) {
+        next.views[view][index].properties.size = size;
+        next.views[view][index].properties.pos = pos;
+      }
       return next;
     });
   }
@@ -574,7 +579,7 @@ export default function App() {
               onSelect={handleSelect}
               onMove={moveElement}
               onMoveMany={moveManyElements}
-              onResize={resizeElement}
+              onResizeMany={resizeManyElements}
               assetMap={assetMap}
               variables={variablesByScheme[selectedScheme]}
             />
