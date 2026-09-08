@@ -67,6 +67,7 @@ const FALLBACK_COLOR: Record<string, string> = {
   rating: `${CANVAS_HEX.teal}b3`,
   datetime: `${CANVAS_HEX.indigo}73`,
   gamelistinfo: `${CANVAS_HEX.slateBlue}73`,
+  helpsystem: `${CANVAS_HEX.teal}73`,
 };
 
 const SELECTION_COLOR = CANVAS_HEX.lightBlue;

@@ -11,16 +11,26 @@ arquivo Python.
 
 Escopo: elementos necessários para posicionar objetos visualmente, dos
 primários (`carousel`, `grid`, `textlist`) aos secundários mais comuns
-(`image`, `text`, `video`, `badges`, `rating`, `datetime`, `gamelistinfo`).
+(`image`, `text`, `video`, `badges`, `rating`, `datetime`, `gamelistinfo`,
+`helpsystem`).
 
-NOTA DE PRECISÃO: `carousel`, `image` e `text` foram cruzados diretamente
-contra o THEMES-DEV.md e o tema Iconic (ver conversa que originou o
-projeto). Os elementos adicionados na rodada de expansão (`grid`,
-`textlist`, `video`, `badges`, `rating`, `datetime`, `gamelistinfo`) seguem
-o mesmo padrão estrutural, mas o conjunto exato de propriedades é um
-subconjunto de melhor esforço focado em geometria/posicionamento — vale
-revalidar contra o THEMES-DEV.md antes de expandir além disso. `sound`,
-`helpsystem`, `<variant>`, `<aspectRatio>` continuam fora do escopo.
+NOTA DE PRECISÃO: `carousel`, `image`, `text` e `helpsystem` foram
+cruzados diretamente contra um clone real do tema Iconic (CC0,
+github.com/Siddy212/iconic-es-de, arquivo
+aspect-ratio-16-9-detailed.xml). Os demais elementos adicionados na
+rodada de expansão (`grid`, `textlist`, `video`, `badges`, `rating`,
+`datetime`, `gamelistinfo`) seguem o mesmo padrão estrutural, mas o
+conjunto exato de propriedades é um subconjunto de melhor esforço focado
+em geometria/posicionamento — vale revalidar contra o THEMES-DEV.md antes
+de expandir além disso.
+
+`sound` fica de fora de propósito: só existe sob `<view name="all">`
+(navegação/sons globais), que o modelo interno não representa (só
+"system"/"gamelist") — antes de dar suporte, precisaria expandir o
+modelo pra ter uma terceira chave de view, e `sound` não tem posição
+visual nenhuma (só `path`), então nem se encaixa no "escopo" acima desta
+docstring. `<variant>`, `<include>`, `<aspectRatio>` continuam fora do
+escopo (confirmado que o tema Iconic real usa os três pesadamente).
 """
 
 from dataclasses import dataclass, field
@@ -256,10 +266,47 @@ GAMELISTINFO = ElementDef(
     ),
 )
 
+# ---------------------------------------------------------------------------
+# helpsystem (secundário) — a barra de dicas de botão no rodapé.
+#
+# Cruzado contra o tema Iconic de verdade (github.com/Siddy212/iconic-es-de,
+# arquivo aspect-ratio-16-9-detailed.xml): ao contrário de todo outro
+# elemento aqui, helpsystem NÃO tem `size` nem `zIndex` no ES-DE real — por
+# isso não usa COMMON_TRANSFORM_PROPS. Tem uma variante "dimmed" de pos/
+# origin (posDimmed/originDimmed) pra quando o help fica esmaecido.
+# `customButtonIcon` (ícone por botão, um elemento repetido com atributo
+# `button`) existe no tema real mas não cabe no modelo de propriedade
+# plana usado aqui — fica de fora, cai como propriedade não suportada.
+# ---------------------------------------------------------------------------
+HELPSYSTEM = ElementDef(
+    tag="helpsystem",
+    group="secondary",
+    views=("system", "gamelist"),
+    instances_per_view="single",
+    default_z_index=900,  # sem prop zIndex própria; alto só de referência (desenha por cima)
+    properties=(
+        PropertyDef("pos", PropType.NORMALIZED_PAIR, default=(0.5, 0.982)),
+        PropertyDef("origin", PropType.NORMALIZED_PAIR, default=(0.5, 1.0),
+                    min_value=0.0, max_value=1.0),
+        PropertyDef("posDimmed", PropType.NORMALIZED_PAIR, default=(0.5, 0.965)),
+        PropertyDef("originDimmed", PropType.NORMALIZED_PAIR, default=(0.5, 1.0),
+                    min_value=0.0, max_value=1.0),
+        PropertyDef("fontPath", PropType.PATH, default=None),
+        PropertyDef("fontSize", PropType.FLOAT, default=0.018),
+        PropertyDef("entrySpacing", PropType.FLOAT, default=0.004, min_value=0.0),
+        PropertyDef("iconTextSpacing", PropType.FLOAT, default=0.002, min_value=0.0),
+        PropertyDef("textColor", PropType.COLOR, default="777777FF"),
+        PropertyDef("textColorDimmed", PropType.COLOR, default="777777FF"),
+        PropertyDef("iconColor", PropType.COLOR, default="777777FF"),
+        PropertyDef("iconColorDimmed", PropType.COLOR, default="777777FF"),
+    ),
+)
+
 ELEMENTS: dict[str, ElementDef] = {
     e.tag: e for e in (
         CAROUSEL, IMAGE, TEXT,
         GRID, TEXTLIST, VIDEO, BADGES, RATING, DATETIME, GAMELISTINFO,
+        HELPSYSTEM,
     )
 }
 

@@ -22,13 +22,27 @@ def _parse_value(raw_text: str, prop_type: PropType):
         parts = text.split()
         if len(parts) != 2:
             raise ThemeParseError(f"NORMALIZED_PAIR inválido: '{text}'")
-        return (float(parts[0]), float(parts[1]))
+        try:
+            return (float(parts[0]), float(parts[1]))
+        except ValueError as exc:
+            # Achado testando com o tema Iconic de verdade: um valor real
+            # era "0.478${systemNamePos}" (variável embutida no meio do
+            # token, resolvida só por dimensão de fontSize — fora do
+            # escopo hoje). Não interpretamos isso, mas o parser nunca
+            # pode quebrar sem controle por causa de um valor assim.
+            raise ThemeParseError(f"NORMALIZED_PAIR com valor não numérico: '{text}'") from exc
     if prop_type == PropType.BOOLEAN:
         return text in ("true", "1")
-    if prop_type in (PropType.FLOAT,):
-        return float(text)
+    if prop_type == PropType.FLOAT:
+        try:
+            return float(text)
+        except ValueError as exc:
+            raise ThemeParseError(f"FLOAT inválido: '{text}'") from exc
     if prop_type == PropType.UNSIGNED_INTEGER:
-        return int(text)
+        try:
+            return int(text)
+        except ValueError as exc:
+            raise ThemeParseError(f"UNSIGNED_INTEGER inválido: '{text}'") from exc
     # PATH, COLOR, STRING permanecem string
     return text
 

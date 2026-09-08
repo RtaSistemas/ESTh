@@ -128,13 +128,32 @@ valores default do schema → desfazer remove → refazer restaura.
 - **Resize de grupo multi-selecionado**: os handles de canto agora
   funcionam com qualquer número de elementos selecionados, escalando
   cada um proporcionalmente à caixa delimitadora do grupo.
+- **11º elemento: `helpsystem`** — validado contra um clone real do tema
+  Iconic (CC0, github.com/Siddy212/iconic-es-de). Ao contrário de todo
+  outro elemento, não tem `size` nem `zIndex` no ES-DE real; tem
+  variantes "dimmed" de pos/origin. `sound` ficou de fora de propósito:
+  só existe sob `<view name="all">`, que o modelo interno não
+  representa, e não tem posição visual nenhuma (só `path`) — não se
+  encaixa no schema atual.
+- **Robustez do parser**: testar com o tema Iconic real expôs um
+  `ValueError` não tratado (viraria 500 na API) ao encontrar um valor
+  numérico com variável embutida no meio do token (ex.
+  `0.478${systemNamePos}`, um recurso de variável por dimensão de
+  fontSize que não implementamos). Agora vira `ThemeParseError` limpo
+  (422) — não passou a suportar a variável, só parou de quebrar sem
+  controle. O arquivo real completo do Iconic ainda não importa de
+  ponta a ponta por causa disso; um excerto real (helpsystem + images)
+  virou fixture de teste em `backend/tests/test_parser.py`.
 
 ## Escopo atual (o que NÃO está incluído ainda)
 
 Deixado para expansão de escopo futura:
 - `<variant>`, `<aspectRatio>`, `<fontSize>`, `<language>`, `<transitions>`
+  — confirmado que o tema Iconic real usa os três primeiros pesadamente
+  (a maior parte do layout de gamelist vive dentro de `<variant>`, que
+  hoje é invisível pro parser: só lê `<view>` filho direto de `<theme>`)
 - `<include>` (arquivos de tema divididos)
-- `sound`, `helpsystem`
+- `sound` (só existe sob `<view name="all">`, fora do modelo atual)
 - Item ativo/navegação real em `carousel`/`grid`/`textlist` — a rodada 4
   adicionou um preview estático dos itens (posição/exibição calculada a
   partir do schema), mas não simula qual item está selecionado nem

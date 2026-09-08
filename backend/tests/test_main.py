@@ -16,7 +16,7 @@ def test_get_schema_returns_reference_resolution_and_elements():
     assert res.status_code == 200
     body = res.json()
     assert body["referenceResolution"] == [1920, 1080]
-    assert len(body["elements"]) == 10
+    assert len(body["elements"]) == 11
     assert "carousel" in body["elements"]
 
 

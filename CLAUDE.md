@@ -98,9 +98,18 @@ frontend/src/
 
 ## Armadilhas conhecidas
 
-- **`instancesPerView: "single"`** (elementos primários: `carousel`,
-  `grid`, `textlist`) — a UI deve impedir adicionar um segundo elemento
-  primário na mesma view. Isso é regra de schema, não hardcode na UI.
+- **`instancesPerView: "single"`** não é exclusivo dos primários —
+  `helpsystem` também é `single` (só faz sentido uma barra de ajuda por
+  view) mesmo sendo `group: "secondary"`. A UI já lê esse campo
+  genericamente (não hardcoda por tipo), então isso já funciona sem
+  mudança de código; só não confundir "single" com "é primário" ao ler
+  o schema.
+- **`helpsystem` não tem `size` nem `zIndex`** — ao contrário de todo
+  outro elemento, real no ES-DE (cruzado contra o tema Iconic), não
+  omissão. `resolveElementBox`/Canvas já caem no fallback `[0.2, 0.1]`
+  de `size` ausente sem quebrar, então isso funciona, mas não assumir
+  que todo elemento tem as 4 props de `COMMON_TRANSFORM_PROPS` — checar
+  o schema antes de generalizar.
 - **CORS no backend** está liberado só para `http://localhost:5173`
   (`main.py`) — ajustar antes de qualquer deploy além de uso local.
 - **`ProcessPoolExecutor`/paralelismo**: não se aplica aqui (não há
@@ -110,9 +119,9 @@ frontend/src/
 ## Escopo atual (não incluído ainda)
 
 Ver README.md, seção "Escopo atual", para a lista completa
-(`<variant>`, `<include>`, `sound`/`helpsystem`, renderização real de
-carousel/grid/textlist, multi-seleção, resize por arraste, persistência
-de projeto).
+(`<variant>`, `<include>`, `sound`, item ativo/navegação real em
+carousel/grid/textlist). `sound` fica de fora de propósito — só existe
+sob `<view name="all">`, que o modelo interno não representa.
 
 ## Commits (Conventional Commits)
 
