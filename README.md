@@ -165,12 +165,17 @@ não abrir vazio.
 - Suíte automatizada no backend (`pytest`, `backend/tests/`): round-trip
   parser → serializer, geometry, capabilities, variables, schema e os
   endpoints da API — 35 testes.
+- Suíte automatizada no frontend (`vitest`, `frontend/tests/`): geometry.ts
+  (mesmo invariante de round-trip do lado Python), persistence.ts,
+  assetStorage.ts (IndexedDB) e o Inspector (React Testing Library,
+  cobrindo a escolha de input por `PropType` e o badge por `group`) — 32
+  testes.
 - `npx tsc -b` e `npx vite build` sem erros.
 - Fluxo end-to-end frontend↔backend com os dois processos no ar,
   confirmado via Chromium headless (screenshots, seleção, edição de
   propriedade, resize por arraste, reload com persistência).
 
-Não testado ainda: frontend não tem suíte automatizada própria (só
-validação manual/via Chromium); nenhum teste cobre o fluxo real de import
-de um tema.xml de um tema publicado de verdade (só o exemplo do
-THEMES-DEV.md).
+Não testado ainda: nenhum teste cobre o fluxo real de import de um
+theme.xml de um tema publicado de verdade (só o exemplo do
+THEMES-DEV.md); Canvas.tsx (react-konva) não tem teste automatizado —
+precisaria mockar canvas em jsdom, deixado de fora por ora.

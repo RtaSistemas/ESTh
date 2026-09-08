@@ -30,14 +30,19 @@ cd frontend
 npm install
 npm run dev          # dev server, padrão http://localhost:5173
 npm run build         # tsc -b && vite build
+npm test              # vitest run (frontend/tests/)
 ```
 
-Backend tem suíte de testes automatizada (`backend/tests/`, pytest) cobrindo
-parser/serializer (round-trip completo), geometry, capabilities, variables,
-o schema (guarda de regressão pra `instancesPerView`) e os endpoints da API.
-Frontend segue validado manualmente (`tsc -b`, `vite build`, fluxo
-end-to-end via Chromium headless) — ainda sem testes automatizados. Ver
-"Validado neste scaffold" no README para o que já foi coberto.
+Backend e frontend têm suíte de testes automatizada. Backend
+(`backend/tests/`, pytest) cobre parser/serializer (round-trip completo),
+geometry, capabilities, variables, o schema (guarda de regressão pra
+`instancesPerView`) e os endpoints da API. Frontend (`frontend/tests/`,
+Vitest + React Testing Library) cobre geometry.ts (mesmo invariante do
+lado Python), persistence.ts, assetStorage.ts (IndexedDB, via
+fake-indexeddb) e o Inspector (escolha de input por `PropType` — a regra
+central do componente). `tsc -b`/`vite build` e o fluxo end-to-end via
+Chromium headless seguem como validação adicional. Ver "Validado neste
+scaffold" no README para o que já foi coberto.
 
 ## Arquitetura
 
