@@ -144,16 +144,60 @@ valores default do schema → desfazer remove → refazer restaura.
   controle. O arquivo real completo do Iconic ainda não importa de
   ponta a ponta por causa disso; um excerto real (helpsystem + images)
   virou fixture de teste em `backend/tests/test_parser.py`.
+- **`<label>` vs `<displayName>` em capabilities.xml**: o capabilities.xml
+  real do Iconic (15 colorSchemes) usa `<label>`; nosso parser só lia
+  `<displayName>`, então todo colorScheme caía no fallback (nome cru em
+  vez do rótulo legível). Corrigido pra aceitar os dois (`label` primeiro).
+
+## Cobertura validada contra o tema Iconic (CC0, real)
+
+Baixei um clone do tema pra validar com dado de produção real, não só
+XML sintético. Resumo do que funciona e do que não, com o motivo:
+
+**Funciona:**
+- Parsear a view compartilhada `system,gamelist` de um arquivo de aspect
+  ratio direto (ex. `aspect-ratio-16-9-detailed.xml`): `helpsystem` +
+  `image`s no nível raiz do arquivo.
+- Resolver e renderizar assets reais do tema — PNG e **SVG** (nunca
+  testado antes, só PNG sintético) — via a pasta de assets importada,
+  com `path` literal apontando pro arquivo real.
+- `capabilities.xml` real (15 colorSchemes, `<label>`) — nomes e rótulos
+  corretos após a correção acima.
+
+**Não funciona, e por quê (não é bug pequeno, é escopo não implementado):**
+- **Nenhuma das 11 variantes de gamelist** (Textlist, Carousel, Grid:
+  Boxart, etc.) nem as 8 variações de aspect ratio como opções dentro do
+  app — cada aspect ratio é um arquivo `.xml` separado no tema real (sem
+  suporte a trocar em runtime), e as variantes de gamelist vivem dentro
+  de blocos `<variant>` que o parser não vê (só lê `<view>` filho direto
+  de `<theme>`, e a maioria dos elementos com posição+asset completos no
+  tema real está dentro de algum `<variant>`).
+- **`colors.xml` do Iconic não é compatível com `variables.py`**: nossa
+  suposição era "um arquivo de variáveis por colorScheme"; o tema real
+  usa **um arquivo só** com múltiplos blocos
+  `<colorScheme name="a,b,c"><variables>...</variables></colorScheme>`
+  (nome combinando várias schemes que competem o mesmo conjunto de
+  cores, cruzado com um segundo conjunto de blocos por variante de
+  layout) — variables.py espera um `<variables>` filho direto de
+  `<theme>` e não acha nenhum. Corrigir isso de verdade exigiria juntar
+  múltiplos blocos por precedência, sem documentação oficial confirmada
+  da ordem de merge — maior que uma correção pontual, fica pra uma
+  rodada de `<variant>`/`<include>`.
+- **fontSize (`small`/`medium`/`large`/`x-large`)** como dimensão de
+  variável (`<fontSize name="small"><variables>...) não é lida — é o que
+  causa o achado de robustez acima.
 
 ## Escopo atual (o que NÃO está incluído ainda)
 
 Deixado para expansão de escopo futura:
 - `<variant>`, `<aspectRatio>`, `<fontSize>`, `<language>`, `<transitions>`
-  — confirmado que o tema Iconic real usa os três primeiros pesadamente
-  (a maior parte do layout de gamelist vive dentro de `<variant>`, que
-  hoje é invisível pro parser: só lê `<view>` filho direto de `<theme>`)
+  — confirmado que o tema Iconic real usa os quatro primeiros
+  pesadamente (ver seção acima)
 - `<include>` (arquivos de tema divididos)
 - `sound` (só existe sob `<view name="all">`, fora do modelo atual)
+- Suporte a colorScheme com múltiplos nomes combinados por arquivo
+  (formato real do Iconic — ver seção acima), só o formato "um arquivo
+  por esquema" hoje
 - Item ativo/navegação real em `carousel`/`grid`/`textlist` — a rodada 4
   adicionou um preview estático dos itens (posição/exibição calculada a
   partir do schema), mas não simula qual item está selecionado nem

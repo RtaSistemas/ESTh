@@ -25,8 +25,16 @@ def parse_capabilities_xml(xml_bytes: bytes) -> list[dict]:
     schemes = []
     for node in root.findall("colorScheme"):
         name = node.get("name", "")
-        display_name_node = node.find("displayName")
-        display_name = display_name_node.text.strip() if display_name_node is not None and display_name_node.text else name
+        # ES-DE real (cruzado contra o tema Iconic) usa <label>, não
+        # <displayName> — aceitamos os dois, `label` primeiro por ser o
+        # que aparece em tema publicado de verdade, com `displayName`
+        # como alternativa e o `name` cru como último recurso.
+        display_name = name
+        for tag in ("label", "displayName"):
+            child = node.find(tag)
+            if child is not None and child.text and child.text.strip():
+                display_name = child.text.strip()
+                break
         schemes.append({"name": name, "displayName": display_name})
 
     return schemes
