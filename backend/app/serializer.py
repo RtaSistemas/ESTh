@@ -29,6 +29,13 @@ def serialize_theme(model: dict) -> bytes:
 
     root = etree.Element("theme")
 
+    variables = model.get("variables") or {}
+    if variables:
+        variables_node = etree.SubElement(root, "variables")
+        for var_name, var_value in variables.items():
+            var_node = etree.SubElement(variables_node, var_name)
+            var_node.text = str(var_value)
+
     for view_name, elements in model.get("views", {}).items():
         if not elements:
             continue

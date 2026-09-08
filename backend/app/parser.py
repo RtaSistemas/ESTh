@@ -1,10 +1,9 @@
 """
 Parser: theme.xml (ES-DE) -> modelo interno.
 
-Escopo do item 1 (editor): parseia apenas <view><elemento name="...">...</elemento></view>
-diretamente sob <theme>. `<variant>`, `<colorScheme>`, `<aspectRatio>`,
-`<include>` e `<variables>` ficam para a expansão de escopo (item 2+),
-documentado em es-theme-editor.md.
+Escopo: <view><elemento name="...">...</elemento></view> e <variables>
+direto sob <theme>. `<variant>`, `<colorScheme>`, `<aspectRatio>` e
+`<include>` continuam fora do escopo (documentado no README).
 """
 
 from lxml import etree
@@ -67,7 +66,19 @@ def parse_theme_xml(xml_bytes: bytes) -> dict:
     if root.tag != "theme":
         raise ThemeParseError(f"Raiz esperada <theme>, encontrado <{root.tag}>")
 
-    model = {"views": {"system": [], "gamelist": []}, "warnings": []}
+    model = {"views": {"system": [], "gamelist": []}, "warnings": [], "variables": {}}
+
+    # <variables> direto sob <theme> — variáveis globais do tema (fontes,
+    # paths de imagem sem colorScheme, etc.), independentes de colorScheme.
+    # Achado testando com o tema.xml real do Iconic: ele tem um bloco desses
+    # com `spacerImage`/`fontRegular`/`fontBold`/`fontLogo`/`fontItalic`.
+    # As variáveis específicas de colorScheme (colors.xml) continuam
+    # separadas, importadas via /variables/parse e mescladas no frontend.
+    variables_node = root.find("variables")
+    if variables_node is not None:
+        model["variables"] = {
+            child.tag: (child.text or "").strip() for child in variables_node
+        }
 
     for view_node in root.findall("view"):
         view_names = [v.strip() for v in view_node.get("name", "").split(",")]
@@ -96,7 +107,36 @@ def parse_theme_xml(xml_bytes: bytes) -> dict:
                             f"propriedade <{prop_name}> de <{tag} name=\"{name}\"> ainda não suportada"
                         )
                         continue
-                    properties[prop_name] = _parse_value(prop_node.text or "", prop_def.type)
+                    try:
+                        properties[prop_name] = _parse_value(prop_node.text or "", prop_def.type)
+                    except ThemeParseError as exc:
+                        # Achado testando com o theme.xml real do Iconic: uma
+                        # única propriedade com valor não interpretável (ex:
+                        # <height>${systemClockSize}</height> — variável
+                        # embutida num FLOAT) derrubava a importação do tema
+                        # inteiro com um 422, mesmo com dezenas de outros
+                        # elementos válidos no mesmo arquivo. Isolar o erro
+                        # por propriedade (like propriedade desconhecida) é
+                        # consistente com o resto do parser: nunca quebra o
+                        # documento inteiro por causa de um valor pontual que
+                        # foge do escopo (variável embutida, resolvida só
+                        # dinamicamente pelo ES-DE).
+                        model["warnings"].append(
+                            f"propriedade <{prop_name}> de <{tag} name=\"{name}\"> "
+                            f"ignorada (valor não interpretável): {exc}"
+                        )
+
+                # Propriedade ausente no XML: preenche com o default real do
+                # ES-DE quando o schema declara um (es_de_elements.py). Nem
+                # todo elemento tem default de pos/size — quando o schema
+                # também não tem (default=None), a propriedade fica de fora
+                # do dict propositalmente: significa que o próprio ES-DE
+                # exige um valor explícito ali (tipicamente vindo de um
+                # <include>/<aspectRatio> que este parser ainda não processa),
+                # não que este editor "esqueceu" de aplicar um valor.
+                for prop_def in element_def.properties:
+                    if prop_def.name not in properties and prop_def.default is not None:
+                        properties[prop_def.name] = prop_def.default
 
                 model["views"][view_name].append({
                     "type": tag,

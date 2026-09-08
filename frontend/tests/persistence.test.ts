@@ -15,6 +15,7 @@ const SAMPLE_MODEL: ThemeModel = {
     ],
   },
   warnings: [],
+  variables: {},
 };
 
 const SAMPLE_PROJECT: PersistedProject = {

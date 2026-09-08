@@ -172,20 +172,81 @@ XML sintético. Resumo do que funciona e do que não, com o motivo:
   de blocos `<variant>` que o parser não vê (só lê `<view>` filho direto
   de `<theme>`, e a maioria dos elementos com posição+asset completos no
   tema real está dentro de algum `<variant>`).
-- **`colors.xml` do Iconic não é compatível com `variables.py`**: nossa
-  suposição era "um arquivo de variáveis por colorScheme"; o tema real
-  usa **um arquivo só** com múltiplos blocos
-  `<colorScheme name="a,b,c"><variables>...</variables></colorScheme>`
-  (nome combinando várias schemes que competem o mesmo conjunto de
-  cores, cruzado com um segundo conjunto de blocos por variante de
-  layout) — variables.py espera um `<variables>` filho direto de
-  `<theme>` e não acha nenhum. Corrigir isso de verdade exigiria juntar
-  múltiplos blocos por precedência, sem documentação oficial confirmada
-  da ordem de merge — maior que uma correção pontual, fica pra uma
-  rodada de `<variant>`/`<include>`.
+- ~~`colors.xml` do Iconic não é compatível com `variables.py`~~ —
+  **corrigido na Rodada 5**: `variables.py` agora entende o formato real
+  (múltiplos `<colorScheme name="a,b,c">` com `<variables>` aninhado),
+  casando `scheme_name` contra a lista separada por vírgula.
 - **fontSize (`small`/`medium`/`large`/`x-large`)** como dimensão de
   variável (`<fontSize name="small"><variables>...) não é lida — é o que
   causa o achado de robustez acima.
+
+## Rodada 5 — teste de composição completa + defaults reais + variáveis
+
+Rodada disparada por um teste de composição completa: abrir o `theme.xml`
+real do Iconic (não um excerto) inteiro pela UI, com a pasta `_inc/images`
+real (86 arquivos) importada como assets, e ver honestamente o que
+renderiza — sem curar o resultado.
+
+**Resultado ANTES desta rodada:** falha de composição. O canvas virava
+essencialmente um retângulo uniforme (uma única cor de fallback em
+~1640/1600 pontos amostrados, 12 cores distintas no total) porque:
+1. 8 dos 9 elementos por view não tinham `pos`/`size` no XML, e o editor
+   não tinha default nenhum por tipo de elemento — todo mundo caía no
+   mesmo fallback `[0,0]`/`[0.2, 0.1]` hardcoded no Canvas, empilhados uns
+   sobre os outros, indistinguíveis.
+2. Praticamente todo `path`/`color` do tema real é uma variável
+   (`${spacerImage}`, `${backgroundArtPath}`...) e o editor não tinha
+   nenhuma variável carregada nesse fluxo de import, então tudo caía no
+   placeholder genérico mesmo com os assets reais disponíveis.
+3. `clock`/`systemstatus` (2 dos 9 elementos por view) nem existiam no
+   schema — descartados com aviso "elemento ainda não suportado".
+
+**Correções feitas, uma por uma:**
+- **Defaults reais por elemento**, conferidos um a um contra o
+  `THEMES.md` oficial (baixado direto do gitlab.com/es-de/emulationstation-de,
+  não por memória): `carousel`/`grid`/`textlist` cada um com seu
+  `pos`/`size`/`origin` documentado (não uma caixa genérica
+  compartilhada); `badges`/`rating` com `size` mas sem `pos`; `helpsystem`
+  corrigido (valores antigos eram estimados, não conferidos — inclusive
+  `instancesPerView` estava errado como `single`, a doc real diz
+  `unlimited`); `zIndex` de `rating`/`gamelistinfo` corrigido pra `45`
+  (estava `35`/`40`). Elementos sem NENHUM default real no ES-DE
+  (`image`, `video`, `text`, `datetime`, `gamelistinfo`) ficam
+  honestamente sem default nenhum — não é lacuna, é o que o ES-DE real
+  também exige (valor viria de um `<include>`/`<aspectRatio>`).
+- **`clock` e `systemstatus`** adicionados ao schema (elementos especiais,
+  sem `zIndex` próprio, sempre desenham por cima — iguais a `helpsystem`
+  nesse aspecto), com defaults reais da doc.
+- **Resolução de variáveis** ganhou dois caminhos que faltavam:
+  `<variables>` direto sob `<theme>` (variáveis globais do tema, ex:
+  `spacerImage`, fontes) agora é parseado e mesclado com as variáveis da
+  colorScheme selecionada; `variables.py` agora entende o formato real do
+  `colors.xml` do Iconic (múltiplos `<colorScheme name="a,b,c">` com
+  `<variables>` aninhado), não só "um arquivo por esquema"; e
+  `resolveVariable` no frontend agora resolve variável embutida no meio
+  de uma string maior (`./_inc/images/${bgGradient}`), não só a string
+  inteira.
+- **Honestidade visual**: elemento sem `pos` real nenhum (nem do XML, nem
+  de default do schema) não finge mais uma posição — fica escalonado por
+  índice com contorno tracejado sempre visível e rótulo com "· sem pos
+  real", pra nunca ser confundido com a posição real do tema.
+- **Parser mais resiliente**: uma propriedade com valor não interpretável
+  (ex.: `<height>${systemClockSize}</height>` do `clock` real — variável
+  embutida num FLOAT) derrubava a importação do **arquivo inteiro** com
+  422. Agora vira aviso por propriedade e o resto do arquivo continua
+  sendo parseado — achado testando com o `theme.xml` real completo, que
+  só é grande o bastante pra bater nesse caso.
+
+**Resultado DEPOIS, mesmo teste, mesmos arquivos reais:** 56 cores
+distintas amostradas (vs. 12 antes), zero erros 422, o `carousel` da
+`system` view renderiza na posição/tamanho real do ES-DE com os itens de
+preview dentro dela, e o `spacerImage` (`space.png`, um PNG branco 16x16
+real do tema) resolve e renderiza de verdade como asset — não é mais um
+placeholder. Ainda não é uma composição perfeita (a maioria dos elementos
+segue sem `<include>`/`<aspectRatio>`, então vários ficam na área
+escalonada "sem pos real"), mas deixou de ser uma falha de composição:
+dá pra distinguir e editar cada elemento, e o que tem posição real do
+ES-DE aparece na posição real.
 
 ## Escopo atual (o que NÃO está incluído ainda)
 
@@ -195,9 +256,6 @@ Deixado para expansão de escopo futura:
   pesadamente (ver seção acima)
 - `<include>` (arquivos de tema divididos)
 - `sound` (só existe sob `<view name="all">`, fora do modelo atual)
-- Suporte a colorScheme com múltiplos nomes combinados por arquivo
-  (formato real do Iconic — ver seção acima), só o formato "um arquivo
-  por esquema" hoje
 - Item ativo/navegação real em `carousel`/`grid`/`textlist` — a rodada 4
   adicionou um preview estático dos itens (posição/exibição calculada a
   partir do schema), mas não simula qual item está selecionado nem
@@ -230,13 +288,14 @@ não abrir vazio.
 ## Validado neste scaffold
 
 - Suíte automatizada no backend (`pytest`, `backend/tests/`): round-trip
-  parser → serializer, geometry, capabilities, variables, schema e os
-  endpoints da API — 35 testes.
+  parser → serializer, geometry, capabilities, variables (incl. formato
+  multi-colorScheme real), schema (defaults reais conferidos contra o
+  THEMES.md) e os endpoints da API — 56 testes.
 - Suíte automatizada no frontend (`vitest`, `frontend/tests/`): geometry.ts
   (mesmo invariante de round-trip do lado Python), persistence.ts,
-  assetStorage.ts (IndexedDB) e o Inspector (React Testing Library,
-  cobrindo a escolha de input por `PropType` e o badge por `group`) — 32
-  testes.
+  assetStorage.ts (IndexedDB), resolveVariable (incl. variável embutida)
+  e o Inspector (React Testing Library, cobrindo a escolha de input por
+  `PropType` e o badge por `group`) — 35 testes.
 - `npx tsc -b` e `npx vite build` sem erros.
 - Fluxo end-to-end frontend↔backend com os dois processos no ar,
   confirmado via Chromium headless (screenshots, seleção, edição de

@@ -66,6 +66,7 @@ const SEED_MODEL: ThemeModel = {
     ],
   },
   warnings: [],
+  variables: {},
 };
 
 export default function App() {
@@ -581,7 +582,10 @@ export default function App() {
               onMoveMany={moveManyElements}
               onResizeMany={resizeManyElements}
               assetMap={assetMap}
-              variables={variablesByScheme[selectedScheme]}
+              // Variáveis globais do tema (theme.xml, ex: fontes/spacerImage)
+              // mescladas com as da colorScheme selecionada — estas últimas
+              // têm precedência em caso de mesmo nome (mais específicas).
+              variables={{ ...model.variables, ...variablesByScheme[selectedScheme] }}
             />
           ) : (
             <p className="viewport-loading">Carregando schema do backend...</p>

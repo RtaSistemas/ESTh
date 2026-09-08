@@ -109,38 +109,52 @@ def test_wrong_root_tag_raises():
         parse_theme_xml(b"<notatheme></notatheme>")
 
 
-def test_invalid_normalized_pair_raises():
+def test_invalid_normalized_pair_generates_warning_and_is_skipped():
+    # Achado testando com o theme.xml real do Iconic: um único valor não
+    # interpretável (aqui, e mais tarde uma variável embutida num FLOAT de
+    # <clock>) não pode derrubar a importação do arquivo inteiro — vira
+    # aviso e a propriedade fica de fora do dict, igual a uma propriedade
+    # desconhecida. Só XML estruturalmente malformado (test_malformed_xml_raises)
+    # continua abortando o parse inteiro.
     xml = b"""
     <theme>
       <view name="gamelist">
-        <image name="frame1"><pos>0.5</pos></image>
+        <image name="frame1"><pos>0.5</pos><zIndex>5</zIndex></image>
       </view>
     </theme>
     """
-    with pytest.raises(ThemeParseError):
-        parse_theme_xml(xml)
+    model = parse_theme_xml(xml)
+    [element] = model["views"]["gamelist"]
+    assert "pos" not in element["properties"]
+    assert element["properties"]["zIndex"] == 5
+    assert any("pos" in w and "frame1" in w for w in model["warnings"])
 
 
-def test_normalized_pair_with_embedded_variable_reference_raises_cleanly():
+def test_normalized_pair_with_embedded_variable_reference_generates_warning():
     # Achado testando com um clone real do tema Iconic (CC0,
     # github.com/Siddy212/iconic-es-de): aspect-ratio-16-9-detailed.xml
     # tem <pos>0.25 0.478${systemNamePos}</pos> — variável embutida no meio
     # do token, resolvida só pela dimensão de fontSize do ES-DE (fora do
-    # nosso escopo). Antes disso, isso derrubava o processo com um
-    # ValueError não tratado (viraria 500 na API); agora vira
-    # ThemeParseError limpo (422), sem interpretar a variável.
+    # nosso escopo). O resto do elemento (e do arquivo) continua sendo
+    # parseado normalmente.
     xml = b"""
     <theme>
       <view name="gamelist">
-        <text name="system-name"><pos>0.25 0.478${systemNamePos}</pos></text>
+        <text name="system-name">
+          <pos>0.25 0.478${systemNamePos}</pos>
+          <text>System</text>
+        </text>
       </view>
     </theme>
     """
-    with pytest.raises(ThemeParseError):
-        parse_theme_xml(xml)
+    model = parse_theme_xml(xml)
+    [element] = model["views"]["gamelist"]
+    assert "pos" not in element["properties"]
+    assert element["properties"]["text"] == "System"
+    assert any("pos" in w for w in model["warnings"])
 
 
-def test_float_with_embedded_variable_reference_raises_cleanly():
+def test_float_with_embedded_variable_reference_generates_warning():
     xml = b"""
     <theme>
       <view name="gamelist">
@@ -148,8 +162,14 @@ def test_float_with_embedded_variable_reference_raises_cleanly():
       </view>
     </theme>
     """
-    with pytest.raises(ThemeParseError):
-        parse_theme_xml(xml)
+    model = parse_theme_xml(xml)
+    [element] = model["views"]["gamelist"]
+    # fontSize não interpretável vira aviso, mas como `text.fontSize` TEM
+    # default real no schema (0.045), o preenchimento de default (mais
+    # abaixo no parser) aplica normalmente — mesmo comportamento de uma
+    # propriedade ausente do XML.
+    assert element["properties"]["fontSize"] == 0.045
+    assert any("fontSize" in w for w in model["warnings"])
 
 
 def test_parses_real_iconic_theme_excerpt():
@@ -195,3 +215,67 @@ def test_parses_real_iconic_theme_excerpt():
         assert gradient_el["properties"]["size"] == (1.0, 0.20)
         assert art_el["properties"]["pos"] == (0.5, 0.5)
         assert art_el["properties"]["size"] == (1.0, 1.0)
+
+
+def test_missing_pos_size_filled_from_real_schema_default_when_one_exists():
+    # carousel sem pos/size no XML deve ganhar o default REAL do ES-DE
+    # ("0 0.38378" / "1 0.2324"), não uma caixa genérica — é exatamente o
+    # que faltava pra composição do tema Iconic real não ficar um retângulo
+    # de fallback só (achado testando com o theme.xml real: quase todo
+    # elemento vem sem pos/size explícitos, contando com esses defaults).
+    xml = b"""
+    <theme>
+      <view name="system">
+        <carousel name="system-carousel"><itemScale>1.2</itemScale></carousel>
+      </view>
+    </theme>
+    """
+    model = parse_theme_xml(xml)
+    [carousel] = model["views"]["system"]
+    assert carousel["properties"]["pos"] == (0.0, 0.38378)
+    assert carousel["properties"]["size"] == (1.0, 0.2324)
+    assert carousel["properties"]["origin"] == (0.0, 0.0)
+
+
+def test_missing_pos_size_stay_absent_when_element_has_no_real_default():
+    # image não tem NENHUM default real de pos/size no ES-DE — preencher
+    # um valor aqui seria inventar dado, não usar um default documentado.
+    # Fica de fora do dict de propósito.
+    xml = b"""
+    <theme>
+      <view name="gamelist">
+        <image name="background-art"><path>${backgroundArtPath}</path></image>
+      </view>
+    </theme>
+    """
+    model = parse_theme_xml(xml)
+    [image] = model["views"]["gamelist"]
+    assert "pos" not in image["properties"]
+    assert "size" not in image["properties"]
+    assert image["properties"]["origin"] == (0.0, 0.0)  # origin é sempre 0 0
+
+
+def test_theme_level_variables_block_is_parsed():
+    # Achado testando com o theme.xml real do Iconic: ele tem um <variables>
+    # direto sob <theme> (fontes, spacerImage) independente de colorScheme.
+    xml = b"""
+    <theme>
+      <variables>
+        <spacerImage>./_inc/images/space.png</spacerImage>
+        <fontBold>./_inc/fonts/Gilroy-Bold.ttf</fontBold>
+      </variables>
+      <view name="gamelist">
+        <image name="bg"><pos>0 0</pos><size>1 1</size></image>
+      </view>
+    </theme>
+    """
+    model = parse_theme_xml(xml)
+    assert model["variables"] == {
+        "spacerImage": "./_inc/images/space.png",
+        "fontBold": "./_inc/fonts/Gilroy-Bold.ttf",
+    }
+
+
+def test_theme_without_variables_block_has_empty_variables_dict():
+    model = parse_theme_xml(b"<theme><view name=\"gamelist\"></view></theme>")
+    assert model["variables"] == {}

@@ -88,7 +88,7 @@ async def parse_capabilities(file: UploadFile):
 async def parse_variables(file: UploadFile, scheme_name: str = ""):
     xml_bytes = await file.read()
     try:
-        variables = parse_variables_xml(xml_bytes)
+        variables = parse_variables_xml(xml_bytes, scheme_name=scheme_name or None)
     except VariablesParseError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"schemeName": scheme_name, "variables": variables}

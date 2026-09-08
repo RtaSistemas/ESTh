@@ -45,6 +45,11 @@ export type ViewName = "system" | "gamelist";
 export interface ThemeModel {
   views: Record<ViewName, ThemeElement[]>;
   warnings: string[];
+  // Variáveis globais do tema (bloco <variables> direto sob <theme>),
+  // independentes de colorScheme — ex: paths de fonte, spacerImage.
+  // Mescladas com as variáveis específicas do colorScheme selecionado
+  // (variablesByScheme) antes de resolver COLOR/PATH pro canvas.
+  variables: Record<string, string>;
 }
 
 export interface ColorSchemeInfo {
@@ -52,15 +57,16 @@ export interface ColorSchemeInfo {
   displayName: string;
 }
 
-// Um valor de propriedade COLOR/PATH pode ser um literal ("FFFFFFFF") ou
-// uma referência de variável ("${gameNameColor}"). Isso não vem tipado do
-// backend (é só string) — a checagem de forma "${...}" acontece no ponto de uso.
+// Um valor de propriedade COLOR/PATH pode ser um literal ("FFFFFFFF"), uma
+// referência de variável inteira ("${gameNameColor}") ou uma variável
+// embutida no meio de uma string maior ("./_inc/images/${bgGradient}") —
+// achado testando com o theme.xml real do Iconic. Substitui toda ocorrência
+// de "${nome}" encontrada; o que não tiver variável correspondente fica
+// como está (referência não resolvida, não um erro).
 export function resolveVariable(
   rawValue: string,
   variables: Record<string, string> | undefined
 ): string {
   if (!variables) return rawValue;
-  const match = /^\$\{(.+)\}$/.exec(rawValue);
-  if (!match) return rawValue;
-  return variables[match[1]] ?? rawValue;
+  return rawValue.replace(/\$\{([^}]+)\}/g, (whole, name) => variables[name] ?? whole);
 }

@@ -98,18 +98,29 @@ frontend/src/
 
 ## Armadilhas conhecidas
 
-- **`instancesPerView: "single"`** não é exclusivo dos primários —
-  `helpsystem` também é `single` (só faz sentido uma barra de ajuda por
-  view) mesmo sendo `group: "secondary"`. A UI já lê esse campo
-  genericamente (não hardcoda por tipo), então isso já funciona sem
-  mudança de código; só não confundir "single" com "é primário" ao ler
-  o schema.
-- **`helpsystem` não tem `size` nem `zIndex`** — ao contrário de todo
-  outro elemento, real no ES-DE (cruzado contra o tema Iconic), não
-  omissão. `resolveElementBox`/Canvas já caem no fallback `[0.2, 0.1]`
-  de `size` ausente sem quebrar, então isso funciona, mas não assumir
-  que todo elemento tem as 4 props de `COMMON_TRANSFORM_PROPS` — checar
-  o schema antes de generalizar.
+- **`helpsystem`/`clock`/`systemstatus` são `instancesPerView: "multiple"`**
+  — o THEMES.md real (baixado direto do gitlab.com/es-de/emulationstation-de,
+  não por memória) diz "unlimited" pros três, com o próprio ES-DE
+  descrevendo como dividir entradas entre múltiplas instâncias de
+  `helpsystem`. Uma versão anterior deste schema tinha `helpsystem` como
+  `"single"` por suposição, nunca conferida contra a doc — corrigido na
+  Rodada 5. Não reintroduzir esse erro.
+- **`helpsystem`/`systemstatus` não têm `size` nem `zIndex`; `clock` tem
+  `size` mas sem default (semântica "auto" própria do ES-DE) e também
+  sem `zIndex`** — real no ES-DE (conferido contra THEMES.md), não
+  omissão. Todo elemento tem `pos`/`origin`; nem todo tem `size`/`zIndex`
+  — checar `es_de_elements.py` antes de generalizar "todo elemento tem
+  as 4 props de `COMMON_TRANSFORM_PROPS`".
+- **Nem todo elemento com `pos`/`size` tem um DEFAULT real pra eles** —
+  `image`, `video`, `text`, `datetime`, `gamelistinfo` não têm nenhum
+  default de `pos`/`size` no ES-DE (confirmado contra THEMES.md: sem
+  "Default is" pra essas props nesses elementos). O `PropertyDef.default`
+  fica `None` de propósito nesses casos — o parser NÃO inventa um valor,
+  e o Canvas desenha esses elementos com contorno tracejado + rótulo
+  "sem pos real" (posição escalonada só pra dar algo editável, não a
+  posição real do tema). Isso não é bug: é o próprio ES-DE que exige
+  valor explícito ali, tipicamente vindo de um `<include>`/`<aspectRatio>`
+  que este editor ainda não processa.
 - **CORS no backend** está liberado só para `http://localhost:5173`
   (`main.py`) — ajustar antes de qualquer deploy além de uso local.
 - **`ProcessPoolExecutor`/paralelismo**: não se aplica aqui (não há

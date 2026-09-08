@@ -48,6 +48,22 @@ def test_round_trip_parse_serialize_parse_preserves_model():
     assert reparsed["views"]["gamelist"] == model["views"]["gamelist"]
 
 
+def test_round_trip_preserves_theme_level_variables():
+    xml = b"""
+    <theme>
+      <variables>
+        <spacerImage>./_inc/images/space.png</spacerImage>
+      </variables>
+      <view name="gamelist">
+        <image name="bg"><pos>0 0</pos><size>1 1</size></image>
+      </view>
+    </theme>
+    """
+    model = parse_theme_xml(xml)
+    reparsed = parse_theme_xml(serialize_theme(model))
+    assert reparsed["variables"] == {"spacerImage": "./_inc/images/space.png"}
+
+
 def test_serialize_formats_normalized_pair_with_five_decimals():
     model = {"views": {"gamelist": [
         {"type": "image", "name": "frame1", "properties": {"pos": (0.5, 0.5)}}

@@ -52,7 +52,7 @@ const CANVAS_HEX = {
 } as const;
 
 // Só 3 matizes reais disponíveis (o 4º é reservado pro contorno de
-// seleção) — 10 tipos de elemento então diferenciam por tier de opacidade,
+// seleção) — 13 tipos de elemento então diferenciam por tier de opacidade,
 // não por matiz: containers primários ficam mais translúcidos (item de
 // exemplo desenha por cima), secundários mais opacos (o preenchimento É
 // o conteúdo visível).
@@ -68,6 +68,8 @@ const FALLBACK_COLOR: Record<string, string> = {
   datetime: `${CANVAS_HEX.indigo}73`,
   gamelistinfo: `${CANVAS_HEX.slateBlue}73`,
   helpsystem: `${CANVAS_HEX.teal}73`,
+  clock: `${CANVAS_HEX.teal}4d`,
+  systemstatus: `${CANVAS_HEX.indigo}4d`,
 };
 
 const SELECTION_COLOR = CANVAS_HEX.lightBlue;
@@ -645,7 +647,7 @@ function ElementVisual({
     );
   }
 
-  // fallback genérico — não deveria ser alcançado com os 10 tipos do
+  // fallback genérico — não deveria ser alcançado com os 13 tipos do
   // schema atual, mas cobre um tipo futuro ainda sem preview dedicado.
   return (
     <Rect
@@ -700,6 +702,26 @@ function boxFromTwoCorners(a: { x: number; y: number }, b: { x: number; y: numbe
     width: Math.max(MIN_BOX_PX, Math.abs(b.x - a.x)),
     height: Math.max(MIN_BOX_PX, Math.abs(b.y - a.y)),
   };
+}
+
+// Alguns elementos (image/video/text/datetime/gamelistinfo — ver
+// es_de_elements.py) genuinamente não têm default de `pos` no ES-DE real:
+// o próprio tema tem que fornecer um valor explícito (normalmente vindo de
+// um <include>/<aspectRatio> que este editor ainda não processa). Antes,
+// todo elemento sem `pos` caía silenciosamente em [0,0] — no tema Iconic
+// real isso empilhava vários elementos diferentes exatamente no mesmo
+// canto, indistinguíveis uns dos outros (achado no teste de composição
+// completa). Em vez de fingir uma posição real, escalona cada um por
+// índice — dá pra selecionar e editar, mas visualmente é óbvio (contorno
+// tracejado, ver isUnpositioned abaixo) que não é a posição real do tema.
+const UNPOSITIONED_COLUMNS = 6;
+const UNPOSITIONED_STEP = 0.05;
+function fallbackPos(index: number): [number, number] {
+  const slot = index % 24;
+  return [
+    0.02 + (slot % UNPOSITIONED_COLUMNS) * UNPOSITIONED_STEP,
+    0.02 + Math.floor(slot / UNPOSITIONED_COLUMNS) * UNPOSITIONED_STEP,
+  ];
 }
 
 function unionBox(boxes: PixelBox[]): PixelBox {
@@ -771,7 +793,7 @@ export function Canvas({
     // Se o elemento arrastado faz parte de um grupo multi-selecionado,
     // move o grupo inteiro pela mesma variação — senão só ele mesmo.
     if (selectedIndices.length > 1 && selectedIndices.includes(index)) {
-      const oldPos = (el.properties.pos as [number, number]) ?? [0, 0];
+      const oldPos = (el.properties.pos as [number, number]) ?? fallbackPos(index);
       onMoveMany(selectedIndices, [newPos[0] - oldPos[0], newPos[1] - oldPos[1]]);
     } else {
       onMove(index, newPos);
@@ -791,7 +813,7 @@ export function Canvas({
   // elemento, é a própria caixa dele (fração 100%), sem caso especial.
   const selectedBoxes = selectedIndices.map((index) => {
     const el = elements[index];
-    const pos = (el.properties.pos as [number, number]) ?? [0, 0];
+    const pos = (el.properties.pos as [number, number]) ?? fallbackPos(index);
     const size = (el.properties.size as [number, number]) ?? [0.2, 0.1];
     const origin = (el.properties.origin as [number, number]) ?? [0, 0];
     return { index, origin, box: effectiveBox(index, resolveElementBox(pos, size, origin, reference)) };
@@ -847,7 +869,7 @@ export function Canvas({
     >
       <Layer>
         {drawOrder.map(({ el, index }) => {
-          const pos = (el.properties.pos as [number, number]) ?? [0, 0];
+          const pos = (el.properties.pos as [number, number]) ?? fallbackPos(index);
           const size = (el.properties.size as [number, number]) ?? [0.2, 0.1];
           const origin = (el.properties.origin as [number, number]) ?? [0, 0];
           const box = effectiveBox(index, resolveElementBox(pos, size, origin, reference));
@@ -873,12 +895,37 @@ export function Canvas({
             se misturar visualmente com o que é desenhado por baixo. Quando o
             elemento está encostado no topo do canvas, a tag desce para
             dentro para não sair da área visível. */}
+        {/* Contorno tracejado pros elementos SEM pos real (nem no tema, nem
+            default do schema) — sinaliza que a caixa é só um lugar pra
+            editar, não a posição real do tema (achado no teste de
+            composição completa com o Iconic: sem isso, vários elementos
+            empilhados na mesma caixa pareciam "um só", indistinguíveis). */}
         {drawOrder.map(({ el, index }) => {
-          const pos = (el.properties.pos as [number, number]) ?? [0, 0];
+          if (el.properties.pos !== undefined) return null;
+          const size = (el.properties.size as [number, number]) ?? [0.2, 0.1];
+          const origin = (el.properties.origin as [number, number]) ?? [0, 0];
+          const box = effectiveBox(index, resolveElementBox(fallbackPos(index), size, origin, reference));
+          return (
+            <Rect
+              key={`unpositioned-${index}`}
+              x={box.x}
+              y={box.y}
+              width={box.width}
+              height={box.height}
+              stroke="#e8e9eccc"
+              strokeWidth={1.5 / displayScale}
+              dash={[6 / displayScale, 4 / displayScale]}
+              listening={false}
+            />
+          );
+        })}
+        {drawOrder.map(({ el, index }) => {
+          const pos = (el.properties.pos as [number, number]) ?? fallbackPos(index);
           const origin = (el.properties.origin as [number, number]) ?? [0, 0];
           const size = (el.properties.size as [number, number]) ?? [0.2, 0.1];
           const box = effectiveBox(index, resolveElementBox(pos, size, origin, reference));
           const isSelected = selectedIndices.includes(index);
+          const isUnpositioned = el.properties.pos === undefined;
           const fontSize = 11 / displayScale;
           const gap = 5 / displayScale;
           const tagHeight = fontSize + 8 / displayScale;
@@ -892,7 +939,7 @@ export function Canvas({
                 cornerRadius={3 / displayScale}
               />
               <KonvaText
-                text={`${el.type}:${el.name}`}
+                text={isUnpositioned ? `${el.type}:${el.name} · sem pos real` : `${el.type}:${el.name}`}
                 fontSize={fontSize}
                 padding={4 / displayScale}
                 fill={isSelected ? "#0b0c0f" : "#e8e9ec"}
