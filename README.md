@@ -110,6 +110,14 @@ valores default do schema → desfazer remove → refazer restaura.
   horizontal/centro vertical) na toolbar quando >= 2 selecionados;
   remover selecionados apaga todos de uma vez. Handles de resize
   continuam só para seleção única.
+- **Preview estático dos elementos secundários restantes**: `video`
+  mostra o poster (`defaultImagePath`) se resolvido, com um ícone de
+  play decorativo por cima; `rating` desenha 5 estrelas reais (Konva
+  `Star`) tingidas por `color`, preenchidas até uma nota de exemplo;
+  `badges` distribui quadrados de exemplo conforme `direction`/
+  `itemsPerRow`/`itemMargin`; `datetime`/`gamelistinfo` mostram texto
+  real (cor/fonte/alinhamento) com um valor de exemplo fixo —
+  `datetime` não interpreta o `format` (estilo strftime) de verdade.
 
 ## Escopo atual (o que NÃO está incluído ainda)
 

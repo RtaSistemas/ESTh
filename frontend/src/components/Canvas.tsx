@@ -1,5 +1,16 @@
 import { useEffect, useState } from "react";
-import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Label, Tag, Group } from "react-konva";
+import {
+  Stage,
+  Layer,
+  Rect,
+  Text as KonvaText,
+  Image as KonvaImage,
+  Label,
+  Tag,
+  Group,
+  Star,
+  RegularPolygon,
+} from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { resolveElementBox, boxTopLeftToPos, boxToPosAndSize } from "../geometry";
 import type { PixelBox } from "../geometry";
@@ -298,6 +309,97 @@ function renderTextlistItems(
   return nodes;
 }
 
+// Nº de estrelas de exemplo e nota fixa só pra mostrar preenchimento
+// parcial — não vem de nenhuma gamelist real, é fora de escopo ler isso.
+const SAMPLE_RATING_STARS = 5;
+const SAMPLE_RATING_VALUE = 3.5;
+
+function renderRatingStars(
+  box: { x: number; y: number; width: number; height: number },
+  displayScale: number,
+  color: string
+) {
+  const fillHex = hexColorToRgba(color);
+  const fillOpacity = hexAlpha(color);
+  const slot = box.width / SAMPLE_RATING_STARS;
+  const outerRadius = Math.min(slot, box.height) * 0.42;
+
+  const nodes = [];
+  for (let i = 0; i < SAMPLE_RATING_STARS; i++) {
+    const filled = i + 1 <= SAMPLE_RATING_VALUE;
+    nodes.push(
+      <Star
+        key={`rating-star-${i}`}
+        x={box.x + slot * (i + 0.5)}
+        y={box.y + box.height / 2}
+        numPoints={5}
+        innerRadius={outerRadius * 0.45}
+        outerRadius={outerRadius}
+        fill={filled ? fillHex : "#ffffff33"}
+        opacity={filled ? fillOpacity : 1}
+        stroke={filled ? undefined : "#ffffff66"}
+        strokeWidth={filled ? 0 : 1 / displayScale}
+        listening={false}
+      />
+    );
+  }
+  return nodes;
+}
+
+// Contagem de exemplo só pra ter volume visual — badges reais viriam de
+// metadados de gamelist.xml (gênero, região etc.), fora de escopo ler.
+const SAMPLE_BADGE_COUNT = 6;
+
+function renderBadgeItems(
+  element: ThemeElement,
+  box: { x: number; y: number; width: number; height: number },
+  displayScale: number
+) {
+  const props = element.properties;
+  const direction = (props.direction as string) ?? "row";
+  const itemsPerLine = Math.max(1, Math.round((props.itemsPerRow as number) ?? 4));
+  const marginNorm = (props.itemMargin as [number, number]) ?? [0.007, 0.007];
+  // itemMargin é normalizado (0..1 da tela) — aqui só precisamos da
+  // proporção entre os eixos, então aplicamos direto sobre a altura como
+  // referência (aproximação razoável pra um preview estático).
+  const marginX = marginNorm[0] * box.height;
+  const marginY = marginNorm[1] * box.height;
+
+  const isRow = direction !== "column";
+  const lines = Math.ceil(SAMPLE_BADGE_COUNT / itemsPerLine);
+  // Tamanho do badge derivado do espaço disponível — o schema não define
+  // um itemSize próprio pra badges (vem do ícone real no ES-DE).
+  const badgeSize = isRow
+    ? Math.min((box.width - marginX * (itemsPerLine - 1)) / itemsPerLine, box.height / lines)
+    : Math.min((box.height - marginY * (itemsPerLine - 1)) / itemsPerLine, box.width / lines);
+
+  const nodes = [];
+  for (let i = 0; i < SAMPLE_BADGE_COUNT; i++) {
+    const line = Math.floor(i / itemsPerLine);
+    const posInLine = i % itemsPerLine;
+    const x = isRow
+      ? box.x + posInLine * (badgeSize + marginX)
+      : box.x + line * (badgeSize + marginX);
+    const y = isRow
+      ? box.y + line * (badgeSize + marginY)
+      : box.y + posInLine * (badgeSize + marginY);
+
+    nodes.push(
+      <Rect
+        key={`badge-${i}`}
+        x={x}
+        y={y}
+        width={badgeSize}
+        height={badgeSize}
+        cornerRadius={3 / displayScale}
+        fill={SAMPLE_ITEM_COLORS[i % SAMPLE_ITEM_COLORS.length]}
+        listening={false}
+      />
+    );
+  }
+  return nodes;
+}
+
 interface ElementVisualProps {
   element: ThemeElement;
   index: number;
@@ -337,6 +439,13 @@ function ElementVisual({
   // Chamado incondicionalmente (Rules of Hooks) mesmo quando o elemento não
   // é "image" — nesse caso assetUrl é undefined e o hook não faz nada.
   const img = useHtmlImage(assetUrl);
+
+  // video mostra o poster (defaultImagePath) se resolvido — mesmo padrão
+  // de "image" acima, reproduzido pro outro path que aponta pra asset.
+  const rawPosterPath = element.type === "video" ? (element.properties.defaultImagePath as string) ?? "" : "";
+  const resolvedPosterPath = resolveVariable(rawPosterPath, variables);
+  const posterAssetUrl = element.type === "video" ? assetMap[resolvedPosterPath] : undefined;
+  const posterImg = useHtmlImage(posterAssetUrl);
 
   if (element.type === "image") {
     if (img) {
@@ -425,8 +534,116 @@ function ElementVisual({
     );
   }
 
-  // demais tipos (video, badges, rating, datetime, gamelistinfo): continuam
-  // placeholder — sem renderização real de vídeo/badges/etc. neste escopo.
+  if (element.type === "video") {
+    const iconSize = Math.min(box.width, box.height) * 0.16;
+    return (
+      <Group>
+        {posterImg ? (
+          <KonvaImage
+            image={posterImg}
+            x={box.x}
+            y={box.y}
+            width={box.width}
+            height={box.height}
+            stroke={isSelected ? SELECTION_COLOR : undefined}
+            strokeWidth={isSelected ? 2 / displayScale : 0}
+            {...commonHandlers}
+          />
+        ) : (
+          <Rect
+            x={box.x}
+            y={box.y}
+            width={box.width}
+            height={box.height}
+            fill={FALLBACK_COLOR.video}
+            cornerRadius={4 / displayScale}
+            stroke={isSelected ? SELECTION_COLOR : "#00000000"}
+            strokeWidth={isSelected ? 2 / displayScale : 0}
+            {...commonHandlers}
+          />
+        )}
+        {/* Ícone de play — só decorativo, distingue video de image mesmo
+            quando o poster (defaultImagePath) já está resolvido. */}
+        <RegularPolygon
+          x={box.x + box.width / 2}
+          y={box.y + box.height / 2}
+          sides={3}
+          radius={iconSize}
+          rotation={90}
+          fill="#ffffffcc"
+          stroke="#00000066"
+          strokeWidth={1 / displayScale}
+          listening={false}
+        />
+      </Group>
+    );
+  }
+
+  if (element.type === "rating" || element.type === "badges") {
+    const rawColor = (element.properties.color as string) ?? "FFFFFFFF";
+    const resolvedColor = resolveVariable(rawColor, variables);
+    return (
+      <Group>
+        {/* Fundo + hit target — mesmo padrão de carousel/grid/textlist:
+            seleção/drag agem na área inteira, itens só decoram por cima. */}
+        <Rect
+          x={box.x}
+          y={box.y}
+          width={box.width}
+          height={box.height}
+          fill={FALLBACK_COLOR[element.type]}
+          cornerRadius={4 / displayScale}
+          stroke={isSelected ? SELECTION_COLOR : "#00000000"}
+          strokeWidth={isSelected ? 2 / displayScale : 0}
+          {...commonHandlers}
+        />
+        <Group listening={false} clipX={box.x} clipY={box.y} clipWidth={box.width} clipHeight={box.height}>
+          {element.type === "rating" && renderRatingStars(box, displayScale, resolvedColor)}
+          {element.type === "badges" && renderBadgeItems(element, box, displayScale)}
+        </Group>
+      </Group>
+    );
+  }
+
+  // datetime/gamelistinfo: texto real com um valor de exemplo fixo — não
+  // interpreta o strftime de `format` de verdade (fora de escopo), só
+  // mostra cor/fonte/alinhamento reais.
+  if (element.type === "datetime" || element.type === "gamelistinfo") {
+    const rawColor = (element.properties.color as string) ?? "000000FF";
+    const resolvedColor = resolveVariable(rawColor, variables);
+    const [, refH] = reference;
+    const fontSizeNorm = (element.properties.fontSize as number) ?? 0.035;
+    const fontSizePx = fontSizeNorm * refH;
+    const defaultAlign = element.type === "gamelistinfo" ? "right" : "left";
+    const align = (element.properties.horizontalAlignment as string) ?? defaultAlign;
+    const sampleText =
+      element.type === "gamelistinfo"
+        ? "42/128"
+        : Boolean(element.properties.displayRelative)
+          ? "há 3 dias"
+          : "15/01/2024";
+
+    return (
+      <KonvaText
+        x={box.x}
+        y={box.y}
+        width={box.width}
+        height={box.height}
+        text={sampleText}
+        fontSize={fontSizePx}
+        fill={hexColorToRgba(resolvedColor)}
+        opacity={hexAlpha(resolvedColor)}
+        align={align}
+        verticalAlign="middle"
+        stroke={isSelected ? SELECTION_COLOR : undefined}
+        strokeWidth={isSelected ? 1 / displayScale : 0}
+        {...commonHandlers}
+      />
+    );
+  }
+
+  // fallback genérico — não deveria ser alcançado com os 10 tipos do
+  // schema atual, mas cobre um tipo futuro ainda sem preview dedicado.
   return (
     <Rect
       x={box.x}
